@@ -4,6 +4,7 @@ from __future__ import print_function
 
 import functools
 
+import pylab as plt
 import tensorflow as tf
 
 layers = tf.keras.layers
@@ -47,7 +48,7 @@ class SimpleNet(tf.keras.Model):
     self.fc_1 = layers.Dense(128, name='fc_1')
     self.fc_last = layers.Dense(classes, name='fc_last')
 
-  def call(self, input_tensor, training):
+  def call(self, input_tensor, training, visualize=False):
     x = self.conv1(input_tensor)
     x = self.bn_conv1(x, training=training)
     x = tf.nn.relu(x)
@@ -62,5 +63,14 @@ class SimpleNet(tf.keras.Model):
     x = self.fc_1(x)
     x = tf.nn.relu(x)
     x = self.fc_last(x)
+
+    if visualize:
+      plt.figure()
+      plt.subplot(1, 2, 1)
+      plt.imshow(input_tensor.numpy()[0, :, :, :3])
+      plt.subplot(1, 2, 2)
+      plt.imshow(input_tensor.numpy()[0, :, :, 3:])
+      plt.suptitle(x.numpy())
+      plt.show()
 
     return x

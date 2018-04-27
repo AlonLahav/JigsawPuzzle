@@ -40,7 +40,7 @@ params.batch_size = 8
 params.train_images_path = '/home/alon/datasets/puzzles/train'
 params.test_images_path = '/home/alon/datasets/puzzles/test'
 params.logdir = '/home/alon/runs/puzzles/1'
-params.action = 'train' # 'train' / 'eval'
+params.action = 'eval' # 'train' / 'eval'
 
 
 def train_one_step(model, images, labels, optimizer):
@@ -132,7 +132,7 @@ for fn in os.listdir(params.test_images_path):
 model = pair_wise.SimpleNet()
 images, labels = get_next_batch(train_images)
 model(images, training=False)
-if 0:
+if 1:
   model.load_weights('/home/alon/git-projects/puzzles/models/last_model.keras')
 
 # Learn
