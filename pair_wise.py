@@ -4,6 +4,7 @@ from __future__ import print_function
 
 import functools
 
+import os
 import pylab as plt
 import numpy as np
 import tensorflow as tf
@@ -51,9 +52,12 @@ class SimpleNet(tf.keras.Model):
     self.fc_last = layers.Dense(classes, name='fc_last')
 
     if not model_fn is None:
-      images = tf.constant(np.zeros((1, 16, 16, 6)).astype(np.float32))
-      self(images, training=False)
-      self.load_weights(model_fn)
+      if os.path.exists(model_fn):
+        images = tf.constant(np.zeros((1, 16, 16, 6)).astype(np.float32))
+        self(images, training=False)
+        self.load_weights(model_fn)
+      else:
+        print('Keras model was not found: ' + model_fn)
 
   def call(self, input_tensor, training, visualize=False):
     x = self.conv1(input_tensor)

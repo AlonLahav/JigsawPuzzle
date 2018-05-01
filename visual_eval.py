@@ -1,4 +1,6 @@
 import os
+import random
+import time
 
 import numpy as np
 import pylab as plt
@@ -17,8 +19,13 @@ if not tf.executing_eagerly():
 def split_image(image):
   ps = []
   order = []
-  for p1idx_x in range(params.puzzle_n_parts[0]):
-    for p1idx_y in range(params.puzzle_n_parts[1]):
+  xs = range(params.puzzle_n_parts[0])
+  ys = range(params.puzzle_n_parts[1])
+  if 1:
+    random.shuffle(xs)
+    random.shuffle(ys)
+  for p1idx_x in xs:
+    for p1idx_y in ys:
       im = image[p1idx_y * params.patch_size:(p1idx_y + 1) * params.patch_size,
                  p1idx_x * params.patch_size:(p1idx_x + 1) * params.patch_size,:]
       order.append((p1idx_y, p1idx_x))
@@ -27,11 +34,12 @@ def split_image(image):
 
 
 def visualize(org_image, split_order, pi):
-  plt.figure()
-  plt.imshow(org_image - np.min(org_image))
-  for idx, yx in enumerate(split_order):
-    plt.text((yx[1] + .5) * params.patch_size, (yx[0] + 0.5) * params.patch_size, idx, bbox=dict(boxstyle="round", ec=(1., 0.5, 0.5), fc=(1., 0.8, 0.8),))
-  print ' -- '
+  if 1:
+    plt.figure()
+    plt.imshow(org_image - np.min(org_image))
+    for idx, yx in enumerate(split_order):
+      plt.text((yx[1] + .5) * params.patch_size, (yx[0] + 0.5) * params.patch_size, idx, bbox=dict(boxstyle="round", ec=(1., 0.5, 0.5), fc=(1., 0.8, 0.8),))
+    print ' -- '
 
   all_pos = np.array([(p[1][0], p[1][1]) for p in pi])
   minx = int(np.floor(np.min(all_pos[:, 1])))
@@ -53,9 +61,9 @@ def visualize(org_image, split_order, pi):
   plt.show()
 
 
-eval_images = run_train_val.get_images_from_folder(params.train_images_path)
+eval_images = run_train_val.get_images_from_folder(params.eval_images_path)
 
-model = pair_wise.SimpleNet(model_fn='/home/alon/git-projects/JigsawPuzzle/models/last_model.keras')
+model = pair_wise.SimpleNet(model_fn=params.model_2_load)
 
 #if 1:
 while 1:
@@ -64,10 +72,13 @@ while 1:
   sigmoid_res = 1/(1+np.exp(-logits))
   true_pred = 100.0 * np.sum(1 - np.any((np.round(sigmoid_res) == 1) - labels, axis=1)) / params.batch_size
   print('Accuracy On Test: ' + str(true_pred))
+  if 0:#true_pred != 100:
+    print(np.round(sigmoid_res))
+    print(labels)
 
   #exit(0)
 
-im_idx = 9
+im_idx = 3
 Pi = []
 im2use = eval_images[im_idx]
 left_patches, split_order = split_image(im2use)
@@ -97,7 +108,7 @@ while len(left_patches) > 0:
         new_coords = (patch_to_check[1][0] + 1, patch_to_check[1][1], idx)
         Pi.append((im2, (new_coords)))
     if not no_match_was_found:
-      visualize(eval_images[im_idx], split_order, Pi)
+      #visualize(eval_images[im_idx], split_order, Pi)
       break
 
   if no_match_was_found:

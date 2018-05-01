@@ -13,6 +13,7 @@ import pair_wise
 
 '''
 TO DO:
+- Fix memory(?) problem
 - Check results visually
 - Check filters visually
 - GitHub
@@ -36,17 +37,22 @@ def train_one_step(model, images, labels, optimizer):
   return loss
 
 def crop_and_put_label_2(image):
-  p1idx_x = np.random.randint(1, params.puzzle_n_parts[0])
-  p1idx_y = np.random.randint(1, params.puzzle_n_parts[1])
-  p2idx_x = np.random.randint(1, params.puzzle_n_parts[0])
-  p2idx_y = np.random.randint(1, params.puzzle_n_parts[1])
-  if p1idx_x == p2idx_x - 1 and p1idx_y == p2idx_y:
+  p1idx_x = np.random.randint(0, params.puzzle_n_parts[0])
+  p1idx_y = np.random.randint(0, params.puzzle_n_parts[1])
+  p2idx_x = np.random.randint(0, params.puzzle_n_parts[0])
+  p2idx_y = np.random.randint(0, params.puzzle_n_parts[1])
+  if 0:
+    p1idx_x = 0
+    p1idx_y = 0
+    p2idx_x = 0
+    p2idx_y = 1
+  if p1idx_x == p2idx_x + 1 and p1idx_y == p2idx_y:
     label = [1, 0, 0, 0]  # patch2 is on the left
-  elif p1idx_x == p2idx_x + 1 and p1idx_y == p2idx_y:
+  elif p1idx_x == p2idx_x - 1 and p1idx_y == p2idx_y:
     label = [0, 1, 0, 0]  # patch2 is on the right
-  elif p1idx_y == p2idx_y - 1 and p1idx_x == p2idx_x:
-    label = [0, 0, 1, 0]  # patch2 is on the top
   elif p1idx_y == p2idx_y + 1 and p1idx_x == p2idx_x:
+    label = [0, 0, 1, 0]  # patch2 is on the top
+  elif p1idx_y == p2idx_y - 1 and p1idx_x == p2idx_x:
     label = [0, 0, 0, 1]  # patch2 is on the bottom
   else:
     label = [0, 0, 0, 0]  # far patches
@@ -62,8 +68,8 @@ def crop_and_put_label_2(image):
 
 
 def crop_and_put_label(image):
-  p1idx_x = np.random.randint(1, params.puzzle_n_parts[0])
-  p1idx_y = np.random.randint(1, params.puzzle_n_parts[1])
+  p1idx_x = np.random.randint(0, params.puzzle_n_parts[0])
+  p1idx_y = np.random.randint(0, params.puzzle_n_parts[1])
   p2idx_x = p1idx_x
   p2idx_y = p1idx_y
   rel = np.random.randint(5)
@@ -114,22 +120,24 @@ def get_next_batch(images_list):
   lb_batch = []
   for _ in range(params.batch_size):
     idx = np.random.randint(len(images_list))
-    images_np, labels_np = crop_and_put_label_2(images_list[idx])
+    images_np, labels_np = crop_and_put_label (images_list[idx])
     im_batch.append(images_np)
     lb_batch.append(labels_np)
-  return tf.constant(im_batch), tf.constant(lb_batch)
+  return im_batch, lb_batch
 
 
 # Get images to work on
 def get_images_from_folder(folder):
   images = []
-  for fn in os.listdir(params.train_images_path):
+  for fn in os.listdir(folder):
     if fn.endswith('jpeg'):
-      im = imageio.imread(params.train_images_path + '/' + fn).astype('float32')
+      im = imageio.imread(folder + '/' + fn).astype('float32')
       im = cv2.resize(im, (params.patch_size * params.puzzle_n_parts[0], params.patch_size * params.puzzle_n_parts[1]))
       im = im / im.max()
       im = im - im.mean()
       images.append(im)
+      if len(images) >= params.max_images_per_folder:
+        break
   return images
 
 def train_val():
@@ -137,7 +145,7 @@ def train_val():
   test_images  = get_images_from_folder(params.test_images_path)
 
   # Init net
-  model = pair_wise.SimpleNet(model_fn='/home/alon/git-projects/JigsawPuzzle/models/1/last_model.keras')
+  model = pair_wise.SimpleNet(model_fn=params.model_2_load)
 
   # Learn
   if params.action == 'train':
@@ -167,8 +175,16 @@ def train_val():
           all_true_pred.append(true_pred)
           tf.contrib.summary.scalar('accuracy', true_pred)
           print('Accuracy On Test: ' + str(true_pred))
+
+          images, labels = get_next_batch(train_images)
+          logits = model(images, training=False).numpy()
+          sigmoid_res = 1 / (1 + np.exp(-logits))
+          true_pred = 100.0 * np.sum(1 - np.any((np.round(sigmoid_res) == 1) - labels, axis=1)) / params.batch_size
+          all_true_pred.append(true_pred)
+          tf.contrib.summary.scalar('train_accuracy', true_pred)
+          print('Accuracy On Train: ' + str(true_pred))
         if iter % 1000 == 0:
-          model.save_weights('/home/alon/git-projects/JigsawPuzzle/models/1/last_model.keras')
+          model.save_weights(params.model_2_save)
     plt.figure()
     plt.subplot(1, 2, 1)
     plt.plot(all_loss)
@@ -176,14 +192,20 @@ def train_val():
     plt.plot(all_true_pred)
     plt.show()
 
-  if params.action == 'eval':
+  if params.action == 'test':
     images, labels = get_next_batch(test_images)
     logits = model(images, training=False).numpy()
     sigmoid_res = 1/(1+np.exp(-logits))
-    true_pred = 100.0 * np.sum(1 - np.any((np.round(sigmoid_res) == 1) - labels, axis=1)) / params.batch_size
-    print('Accuracy On Test: ' + str(true_pred))
+    test_true_pred = 100.0 * np.sum(1 - np.any((np.round(sigmoid_res) == 1) - labels, axis=1)) / params.batch_size
+
+    images, labels = get_next_batch(train_images)
+    logits = model(images, training=False).numpy()
+    sigmoid_res = 1/(1+np.exp(-logits))
+    train_true_pred = 100.0 * np.sum(1 - np.any((np.round(sigmoid_res) == 1) - labels, axis=1)) / params.batch_size
+
+    print('Accuracy On Test: ' + str(test_true_pred) + ' , On train: ' + str(train_true_pred))
 
 
 if __name__ == '__main__':
-  params.action = 'eval'  # 'train' / 'eval'/ 'eval-visually'
+  params.action = 'train'  # 'train' / 'eval'/ 'eval-visually'
   train_val()
