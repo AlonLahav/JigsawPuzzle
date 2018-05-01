@@ -5,6 +5,7 @@ from __future__ import print_function
 import functools
 
 import pylab as plt
+import numpy as np
 import tensorflow as tf
 
 layers = tf.keras.layers
@@ -27,7 +28,8 @@ class SimpleNet(tf.keras.Model):
   '''
   def __init__(self,
                name=None,
-               trainable=True):
+               trainable=True,
+               model_fn=None):
     super(SimpleNet, self).__init__(name='')
 
     data_format = 'channels_last'
@@ -47,6 +49,11 @@ class SimpleNet(tf.keras.Model):
     self.flatten = layers.Flatten()
     self.fc_1 = layers.Dense(128, name='fc_1')
     self.fc_last = layers.Dense(classes, name='fc_last')
+
+    if not model_fn is None:
+      images = tf.constant(np.zeros((1, 16, 16, 6)).astype(np.float32))
+      self(images, training=False)
+      self.load_weights(model_fn)
 
   def call(self, input_tensor, training, visualize=False):
     x = self.conv1(input_tensor)
