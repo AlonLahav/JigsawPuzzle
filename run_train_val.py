@@ -123,7 +123,7 @@ def get_next_batch(images_list):
     images_np, labels_np = crop_and_put_label (images_list[idx])
     im_batch.append(images_np)
     lb_batch.append(labels_np)
-  return im_batch, lb_batch
+  return tf.constant(im_batch), tf.constant(lb_batch)
 
 
 # Get images to work on
@@ -185,6 +185,7 @@ def train_val():
           print('Accuracy On Train: ' + str(true_pred))
         if iter % 1000 == 0:
           model.save_weights(params.model_2_save)
+          model = pair_wise.SimpleNet(model_fn=params.model_2_save)
     plt.figure()
     plt.subplot(1, 2, 1)
     plt.plot(all_loss)
