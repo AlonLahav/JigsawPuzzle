@@ -140,7 +140,7 @@ def get_images_from_folder(folder):
         break
   return images
 
-def train_val():
+def train_val(params):
   train_images = get_images_from_folder(params.train_images_path)
   test_images  = get_images_from_folder(params.test_images_path)
 
@@ -155,7 +155,7 @@ def train_val():
 
     summary_writer = tf.contrib.summary.create_file_writer(params.logdir, flush_millis=10)
     with summary_writer.as_default(), tf.contrib.summary.always_record_summaries():
-      n_iters_to_train = params.num_epocs * len(train_images) / params.batch_size
+      n_iters_to_train = int(params.num_epocs * len(train_images) / params.batch_size)
       tb = time.time()
       for iter in range(n_iters_to_train):
         images, labels = get_next_batch(train_images)
@@ -209,4 +209,4 @@ def train_val():
 
 if __name__ == '__main__':
   params.action = 'train'  # 'train' / 'eval'/ 'eval-visually'
-  train_val()
+  train_val(params)
