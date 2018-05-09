@@ -15,10 +15,11 @@ import pair_wise
 import run_train_val
 import visual_eval
 
+back_prop_mode = True
 params.batch_size = 1
 LR = 0.75
 lr_step = 500
-n_iters = 5000
+n_iters = 50
 video_output = 1
 
 if not tf.executing_eagerly():
@@ -36,12 +37,12 @@ def figure_2_np_array(fig):
 train_images = run_train_val.get_images_from_folder(params.train_images_path)
 model = pair_wise.SimpleNet(model_fn=params.model_2_load)
 
-idx = 0
-all_patches, split_order = visual_eval.split_image(train_images[idx], shuffle=False)
+im_idx = 0
+all_patches, split_order = visual_eval.split_image(train_images[im_idx], shuffle=False)
 #visual_eval.visualize(train_images[idx], split_order, None)
-pi = [[all_patches[i], np.array((0., 0.))] for i in range(len(all_patches))]
-pi = [[all_patches[i], np.array((0., 0.))] for i in [0, 1, 2, 5, 10, 6, 7, 11, 12]]
-#pi = [[all_patches[i], np.array((0., 0.))] for i in [0, 1, 2]]
+#pi = [[all_patches[i], np.array((0., 0.))] for i in range(len(all_patches))]
+#pi = [[all_patches[i], np.array((0., 0.))] for i in [0, 1, 2, 5, 10, 6, 7, 11, 12]]
+pi = [[all_patches[i], np.array((0., 0.))] for i in [0, 1, 2]]
 
 if video_output:
   timestr = strftime("%Y-%m-%d_%H:%M", gmtime())

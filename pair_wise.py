@@ -28,6 +28,7 @@ class SimpleNet(tf.keras.Model):
 
   '''
   def __init__(self,
+               classes=4,
                name=None,
                trainable=True,
                model_fn=None):
@@ -35,7 +36,6 @@ class SimpleNet(tf.keras.Model):
 
     data_format = 'channels_last'
     bn_axis = 1 if data_format == 'channels_first' else 3
-    classes = 4
 
     self.max_pool = layers.MaxPooling2D((3, 3), strides=(2, 2), data_format=data_format)
 
@@ -60,7 +60,10 @@ class SimpleNet(tf.keras.Model):
         print('Keras model was not found: ' + model_fn)
 
   def call(self, input_tensor, training, visualize=False):
-    x = self.conv1(input_tensor)
+    if len(self.conv1.weights) == 0:
+      x = self.conv1(tf.constant(input_tensor))
+    else:
+      x = self.conv1(input_tensor)
     x = self.bn_conv1(x, training=training)
     x = tf.nn.relu(x)
     x = self.max_pool(x)
