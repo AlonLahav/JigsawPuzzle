@@ -158,7 +158,7 @@ def get_images_from_folder(folder):
 
 def train_val(params):
   train_images = get_images_from_folder(params.train_images_path)
-  test_images = get_images_from_folder(params.train_images_path)
+  test_images = get_images_from_folder(params.test_images_path)
 
   # Init net
   if est_dist_ths:

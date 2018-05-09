@@ -19,7 +19,7 @@ back_prop_mode = True
 params.batch_size = 1
 LR = 0.75
 lr_step = 500
-n_iters = 50
+n_iters = 2500
 video_output = 1
 
 if not tf.executing_eagerly():
@@ -40,9 +40,9 @@ model = pair_wise.SimpleNet(model_fn=params.model_2_load)
 im_idx = 0
 all_patches, split_order = visual_eval.split_image(train_images[im_idx], shuffle=False)
 #visual_eval.visualize(train_images[idx], split_order, None)
-#pi = [[all_patches[i], np.array((0., 0.))] for i in range(len(all_patches))]
+pi = [[all_patches[i], np.array((0., 0.))] for i in range(len(all_patches))]
 #pi = [[all_patches[i], np.array((0., 0.))] for i in [0, 1, 2, 5, 10, 6, 7, 11, 12]]
-pi = [[all_patches[i], np.array((0., 0.))] for i in [0, 1, 2]]
+#pi = [[all_patches[i], np.array((0., 0.))] for i in [5, 10, 6, 11]]
 
 if video_output:
   timestr = strftime("%Y-%m-%d_%H:%M", gmtime())
@@ -53,7 +53,10 @@ for n in range(n_iters):
   if n % lr_step == 0 and n > 0 and LR > 0.2:
     LR *= 0.5
   idx1 = np.random.randint(len(pi))
-  idx2 = np.random.randint(len(pi))
+  while 1:
+    idx2 = np.random.randint(len(pi))
+    if idx1 != idx2:
+      break
   images = np.concatenate([pi[idx1][0], pi[idx2][0]], axis=2)[np.newaxis, :]
   logits = model(images, training=False).numpy()
   sigmoid_res = 1 / (1 + np.exp(-logits)).squeeze()
@@ -63,12 +66,12 @@ for n in range(n_iters):
   #exp_shift = np.round(exp_shift)
   conf_shift = np.max(exp_shift ** 2)
 
-  fig = plt.figure(1)
-  fig.clf()
-  visual_eval.visualize(None, None, pi, show=False)
   current_shift = pi[idx2][1] - pi[idx1][1]
   pi[idx2][1] += LR * conf_shift * (exp_shift - current_shift)
 
+  fig = plt.figure(1)
+  fig.clf()
+  visual_eval.visualize(None, None, pi, show=False)
   if video_output:
     plt.title(n)
     img = figure_2_np_array(fig)
