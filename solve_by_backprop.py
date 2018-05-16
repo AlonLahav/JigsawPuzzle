@@ -19,7 +19,8 @@ import visual_eval
 params.batch_size = 1
 LR = 1.0
 lr_step = 750
-n_iters = 800
+n_iters = 2000
+inc_n_rel_patches = 200
 video_output = 1
 
 if not tf.executing_eagerly():
@@ -58,7 +59,7 @@ im_idx = 0
 all_patches, split_order = visual_eval.split_image(train_images[im_idx], shuffle=False)
 #visual_eval.visualize(train_images[idx], split_order, None)
 pi = [[all_patches[i], np.array((0., 0.))] for i in range(len(all_patches))]
-pi = [[all_patches[i], np.array((0., 0.))] for i in [0, 1, 2, 3, 5, 6, 7, 8, 10, 11, 12, 13]]
+#pi = [[all_patches[i], np.array((0., 0.))] for i in [0, 1, 2, 3, 5, 6, 7, 8, 10, 11, 12, 13]]
 #pi = [[all_patches[i], np.array((0., 0.))] for i in [0, 1, 2, 5, 10, 6, 7, 11, 12]]
 #pi = [[all_patches[i], np.array((0., 0.))] for i in [5, 6, 7, 12, 11]]
 #pi = [[all_patches[i], np.array((0., 0.))] for i in [5, 6, 7]]
@@ -73,33 +74,36 @@ if video_output:
   timestr = strftime("%Y-%m-%d_%H:%M", gmtime())
   video = imageio.get_writer('output_tmp/pzl_' + timestr + '.mp4', fps=60)
 
+n_rel_patches = 1
 for n in range(n_iters):
+  if n % inc_n_rel_patches == 0 and n != 0 and n_rel_patches < 8:
+    n_rel_patches *= 2
   print (n, n_iters)
   if n % lr_step == 0 and n > 0 and LR > 0.2:
     LR *= 0.5
   idx1 = np.random.randint(len(pi))
-  while 1:
-    idx2 = np.random.randint(len(pi))
-    if idx1 != idx2:
-      break
-  images = np.concatenate([pi[idx1][0], pi[idx2][0]], axis=2)[np.newaxis, :]
-  logits = model(images, training=False).numpy()
-  with tfe.GradientTape() as tape:
-    sigmoid_res = 1 / (1 + np.exp(-logits)).squeeze()
-    sigmoid_res.shape = (params.pred_radius * 2 + 1, params.pred_radius * 2 + 1)
-    exp_shift_matrix = sigmoid_res
-    if 0: # TODO: TF cannot derivate it - there must be a way..
-      current_shift = get_current_shift_matrix(pi[idx2][1], pi[idx1][1])
-    else:
-      est_arg_max = np.unravel_index(np.argmax(sigmoid_res), sigmoid_res.shape)
-      if sigmoid_res[est_arg_max] > 0.5:
-        d = pi[idx2][1] - pi[idx1][1]
-        loss = tf.losses.absolute_difference(d + params.pred_radius,  est_arg_max)
+  for _ in range(n_rel_patches):
+    loss = None
+    while 1:
+      idx2 = np.random.randint(len(pi))
+      if idx1 != idx2:
+        break
+    images = np.concatenate([pi[idx1][0], pi[idx2][0]], axis=2)[np.newaxis, :]
+    logits = model(images, training=False).numpy()
+    with tfe.GradientTape() as tape:
+      sigmoid_res = 1 / (1 + np.exp(-logits)).squeeze()
+      sigmoid_res.shape = (params.pred_radius * 2 + 1, params.pred_radius * 2 + 1)
+      exp_shift_matrix = sigmoid_res
+      if 0: # TODO: TF cannot derivate it - there must be a way..
+        current_shift = get_current_shift_matrix(pi[idx2][1], pi[idx1][1])
       else:
-        loss = None
-  if not loss is None:
-    grads = tape.gradient(loss, variables)
-    optimizer.apply_gradients(zip(grads, variables), tf.train.get_or_create_global_step())
+        est_arg_max = np.unravel_index(np.argmax(sigmoid_res), sigmoid_res.shape)
+        if sigmoid_res[est_arg_max] > 0.5:
+          d = pi[idx2][1] - pi[idx1][1]
+          loss = tf.losses.absolute_difference(d + params.pred_radius,  est_arg_max) / n_rel_patches
+    if not loss is None:
+      grads = tape.gradient(loss, variables)
+      optimizer.apply_gradients(zip(grads, variables), tf.train.get_or_create_global_step())
 
   fig = plt.figure(1)
   fig.clf()
