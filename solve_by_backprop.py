@@ -2,6 +2,7 @@ import os
 import random
 import time
 from time import gmtime, strftime
+import copy
 
 import numpy as np
 import pylab as plt
@@ -15,11 +16,10 @@ import pair_wise
 import run_train_val
 import visual_eval
 
-back_prop_mode = True
 params.batch_size = 1
-LR = 0.75
-lr_step = 500
-n_iters = 2500
+LR = 1.0
+lr_step = 750
+n_iters = 800
 video_output = 1
 
 if not tf.executing_eagerly():
@@ -34,15 +34,40 @@ def figure_2_np_array(fig):
   return data
 
 
+def get_current_shift_matrix(coords1, coords2):
+  # TODO: float relative coord -> interpulate it to the "current shift" matrix
+  current_shift = np.zeros((params.pred_radius * 2 + 1, params.pred_radius * 2 + 1))
+  current_shift[2, 2] = 0.5 * (1 - (coords2[0] - coords1[0]) ** 2) + \
+                        0.5 * (1 - (coords2[1] - coords1[1]) ** 2)
+  #idx_y = int(round(coords2[0] - coords1[0] + params.pred_radius))
+  #idx_x = int(round(coords2[1] - coords1[1] + params.pred_radius))
+  #if idx_x >= 0 and idx_x < current_shift.shape[1] and idx_y >= 0 and idx_y < current_shift.shape[0]:
+  #  current_shift[idx_y, idx_x] = 1
+  return current_shift
+
 train_images = run_train_val.get_images_from_folder(params.train_images_path)
-model = pair_wise.SimpleNet(model_fn=params.model_2_load)
+if params.method == 'est_dist_ths':
+  classes = 4 + 1
+elif params.method == 'pred_matrix':
+  classes = (params.pred_radius * 2 + 1) ** 2
+else:
+  classes = 4
+model = pair_wise.SimpleNet(model_fn=params.model_2_load, classes=classes)
 
 im_idx = 0
 all_patches, split_order = visual_eval.split_image(train_images[im_idx], shuffle=False)
 #visual_eval.visualize(train_images[idx], split_order, None)
 pi = [[all_patches[i], np.array((0., 0.))] for i in range(len(all_patches))]
+pi = [[all_patches[i], np.array((0., 0.))] for i in [0, 1, 2, 3, 5, 6, 7, 8, 10, 11, 12, 13]]
 #pi = [[all_patches[i], np.array((0., 0.))] for i in [0, 1, 2, 5, 10, 6, 7, 11, 12]]
-#pi = [[all_patches[i], np.array((0., 0.))] for i in [5, 10, 6, 11]]
+#pi = [[all_patches[i], np.array((0., 0.))] for i in [5, 6, 7, 12, 11]]
+#pi = [[all_patches[i], np.array((0., 0.))] for i in [5, 6, 7]]
+
+optimizer = tf.train.GradientDescentOptimizer(LR / 2 / 1)
+variables = []
+for p in pi:
+  p[1] = tfe.Variable((0., 0.))
+  variables.append(p[1])
 
 if video_output:
   timestr = strftime("%Y-%m-%d_%H:%M", gmtime())
@@ -59,19 +84,30 @@ for n in range(n_iters):
       break
   images = np.concatenate([pi[idx1][0], pi[idx2][0]], axis=2)[np.newaxis, :]
   logits = model(images, training=False).numpy()
-  sigmoid_res = 1 / (1 + np.exp(-logits)).squeeze()
-  exp_shift = np.array([sigmoid_res[3] - sigmoid_res[2], sigmoid_res[0] - sigmoid_res[1]])  # patch 2 is on the left - on the right side of patch 1
-  exp_shift = np.maximum(exp_shift, np.array([-1., -1.]))
-  exp_shift = np.minimum(exp_shift, np.array([ 1.,  1.]))
-  #exp_shift = np.round(exp_shift)
-  conf_shift = np.max(exp_shift ** 2)
-
-  current_shift = pi[idx2][1] - pi[idx1][1]
-  pi[idx2][1] += LR * conf_shift * (exp_shift - current_shift)
+  with tfe.GradientTape() as tape:
+    sigmoid_res = 1 / (1 + np.exp(-logits)).squeeze()
+    sigmoid_res.shape = (params.pred_radius * 2 + 1, params.pred_radius * 2 + 1)
+    exp_shift_matrix = sigmoid_res
+    if 0: # TODO: TF cannot derivate it - there must be a way..
+      current_shift = get_current_shift_matrix(pi[idx2][1], pi[idx1][1])
+    else:
+      est_arg_max = np.unravel_index(np.argmax(sigmoid_res), sigmoid_res.shape)
+      if sigmoid_res[est_arg_max] > 0.5:
+        d = pi[idx2][1] - pi[idx1][1]
+        loss = tf.losses.absolute_difference(d + params.pred_radius,  est_arg_max)
+      else:
+        loss = None
+  if not loss is None:
+    grads = tape.gradient(loss, variables)
+    optimizer.apply_gradients(zip(grads, variables), tf.train.get_or_create_global_step())
 
   fig = plt.figure(1)
   fig.clf()
-  visual_eval.visualize(None, None, pi, show=False)
+  pi_ = []
+  for p in pi:
+    pi_.append([p[0], p[1].numpy()])
+
+  visual_eval.visualize(None, None, pi_, show=False)
   if video_output:
     plt.title(n)
     img = figure_2_np_array(fig)

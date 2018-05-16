@@ -39,16 +39,18 @@ class SimpleNet(tf.keras.Model):
 
     self.max_pool = layers.MaxPooling2D((3, 3), strides=(2, 2), data_format=data_format)
 
-    self.conv1 = layers.Conv2D(8, (3, 3), data_format=data_format, padding='same', name='conv1')
+    self.conv1 = layers.Conv2D(8, (3, 3), data_format=data_format, padding='valid', name='conv1')
     self.bn_conv1 = layers.BatchNormalization(axis=bn_axis, name='bn_conv1')
     self.max_pool1 = layers.MaxPooling2D((3, 3), strides=(2, 2), data_format=data_format)
 
-    self.conv2 = layers.Conv2D(16, (3, 3), data_format=data_format, padding='same', name='conv2')
+    self.conv2 = layers.Conv2D(16, (3, 3), data_format=data_format, padding='valid', name='conv2')
     self.bn_conv2 = layers.BatchNormalization(axis=bn_axis, name='bn_conv2')
     self.max_pool2 = layers.MaxPooling2D((3, 3), strides=(2, 2), data_format=data_format)
 
     self.flatten = layers.Flatten()
     self.fc_1 = layers.Dense(128, name='fc_1')
+    self.fc_2 = layers.Dense(128, name='fc_2')
+    self.fc_3 = layers.Dense(128, name='fc_3')
     self.fc_last = layers.Dense(classes, name='fc_last')
 
     if not model_fn is None:
@@ -74,8 +76,14 @@ class SimpleNet(tf.keras.Model):
     x = self.max_pool(x)
 
     x = self.flatten(x)
+
     x = self.fc_1(x)
     x = tf.nn.relu(x)
+    x = self.fc_2(x)
+    x = tf.nn.relu(x)
+    x = self.fc_3(x)
+    x = tf.nn.relu(x)
+
     x = self.fc_last(x)
 
     if visualize:

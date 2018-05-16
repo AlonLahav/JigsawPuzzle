@@ -19,7 +19,9 @@ params.train_images_path = '/home/alon/datasets/puzzles/train'
 params.test_images_path = '/home/alon/datasets/puzzles/test'
 params.eval_images_path = '/home/alon/datasets/puzzles/eval'
 params.max_images_per_folder = np.inf
-params.logdir = '/home/alon/git-projects/JigsawPuzzle/models/7'
+params.logdir = '/home/alon/git-projects/JigsawPuzzle/models/10 '
 params.model_2_save = params.logdir + '/last_model.keras'
 params.model_2_load = params.model_2_save
-
+params.pred_radius = 2
+params.method = 'pred_matrix' #  pred_matrix / est_dist_ths / one_hot
+params.learning_rate = .1 / params.batch_size
