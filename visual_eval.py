@@ -61,7 +61,7 @@ def visualize(org_image, split_order, pi, show=True):
     min_all = np.array([p[0] for p in pi]).min()
     max_all = np.array([p[0] for p in pi]).max()
     im2show -= min_all
-    im2show /= max_all
+    im2show /= max_all - min_all
     im2show[im2show > 1] = 1
     im2show[im2show < 0] = 0
     plt.imshow(im2show - np.min(im2show))

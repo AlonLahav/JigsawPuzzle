@@ -19,8 +19,8 @@ import visual_eval
 params.batch_size = 1
 LR = 1.0
 lr_step = 750
-n_iters = 2000
-inc_n_rel_patches = 200
+n_iters = 600
+inc_n_rel_patches = 100
 video_output = 1
 
 if not tf.executing_eagerly():
@@ -46,7 +46,7 @@ def get_current_shift_matrix(coords1, coords2):
   #  current_shift[idx_y, idx_x] = 1
   return current_shift
 
-train_images = run_train_val.get_images_from_folder(params.train_images_path)
+images_to_test = run_train_val.get_images_from_folder(params.test_images_path)
 if params.method == 'est_dist_ths':
   classes = 4 + 1
 elif params.method == 'pred_matrix':
@@ -55,12 +55,12 @@ else:
   classes = 4
 model = pair_wise.SimpleNet(model_fn=params.model_2_load, classes=classes)
 
-im_idx = 0
-all_patches, split_order = visual_eval.split_image(train_images[im_idx], shuffle=False)
-#visual_eval.visualize(train_images[idx], split_order, None)
+im_idx = 5
+all_patches, split_order = visual_eval.split_image(images_to_test[im_idx], shuffle=False)
+#visual_eval.visualize(images_to_test[idx], split_order, None)
 pi = [[all_patches[i], np.array((0., 0.))] for i in range(len(all_patches))]
 #pi = [[all_patches[i], np.array((0., 0.))] for i in [0, 1, 2, 3, 5, 6, 7, 8, 10, 11, 12, 13]]
-#pi = [[all_patches[i], np.array((0., 0.))] for i in [0, 1, 2, 5, 10, 6, 7, 11, 12]]
+pi = [[all_patches[i], np.array((0., 0.))] for i in [0, 1, 2, 5, 10, 6, 7, 11, 12]]
 #pi = [[all_patches[i], np.array((0., 0.))] for i in [5, 6, 7, 12, 11]]
 #pi = [[all_patches[i], np.array((0., 0.))] for i in [5, 6, 7]]
 
@@ -73,6 +73,8 @@ for p in pi:
 if video_output:
   timestr = strftime("%Y-%m-%d_%H:%M", gmtime())
   video = imageio.get_writer('output_tmp/pzl_' + timestr + '.mp4', fps=60)
+
+  imageio.imwrite('output_tmp/im.jpg', images_to_test[im_idx])
 
 n_rel_patches = 1
 for n in range(n_iters):
@@ -98,9 +100,9 @@ for n in range(n_iters):
         current_shift = get_current_shift_matrix(pi[idx2][1], pi[idx1][1])
       else:
         est_arg_max = np.unravel_index(np.argmax(sigmoid_res), sigmoid_res.shape)
-        if sigmoid_res[est_arg_max] > 0.5:
-          d = pi[idx2][1] - pi[idx1][1]
-          loss = tf.losses.absolute_difference(d + params.pred_radius,  est_arg_max) / n_rel_patches
+        conf = sigmoid_res[est_arg_max]
+        d = pi[idx2][1] - pi[idx1][1]
+        loss = conf * tf.losses.absolute_difference(d + params.pred_radius,  est_arg_max) / n_rel_patches
     if not loss is None:
       grads = tape.gradient(loss, variables)
       optimizer.apply_gradients(zip(grads, variables), tf.train.get_or_create_global_step())

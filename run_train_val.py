@@ -58,8 +58,10 @@ def train_one_step(model, images, all_labels, optimizer):
 def get_images_from_folder(folder):
   images = []
   for fn in os.listdir(folder):
-    if fn.endswith('jpeg'):
+    if fn.endswith('jpeg') or fn.endswith('jpg'):
       im = imageio.imread(folder + '/' + fn).astype('float32')
+      if im.ndim != 3: # Use only RGB images
+        continue
       im = cv2.resize(im, (params.patch_size * params.puzzle_n_parts[0], params.patch_size * params.puzzle_n_parts[1]))
       im = im / im.max()
       im = im - im.mean()
@@ -125,6 +127,8 @@ def train_val(params):
         # Save model
         if itr % 1000 == 0:
           model.save_weights(params.model_2_save)
+        if 0:
+          tf.keras.utils.plot_model(model, to_file=params.logdir + '/model.png', show_shapes=True)
 
 
 if __name__ == '__main__':
