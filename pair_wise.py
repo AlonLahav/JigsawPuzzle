@@ -28,6 +28,7 @@ class SimpleNet(tf.keras.Model):
 
   '''
   def __init__(self,
+               params,
                classes=4,
                name=None,
                trainable=True,
@@ -55,7 +56,7 @@ class SimpleNet(tf.keras.Model):
 
     if not model_fn is None:
       if os.path.exists(model_fn):
-        images = tf.constant(np.zeros((1, 16, 16, 6)).astype(np.float32))
+        images = tf.constant(np.zeros((1, params.patch_size, params.patch_size, 6)).astype(np.float32))
         self(images, training=False)
         self.load_weights(model_fn)
       else:

@@ -82,7 +82,7 @@ def train_val(params):
     classes = (params.pred_radius * 2 + 1) ** 2
   else:
     classes = 4
-  model = pair_wise.SimpleNet(model_fn=params.model_2_load, classes=classes)
+  model = pair_wise.SimpleNet(params, model_fn=params.model_2_load, classes=classes)
 
   # Learn
   if params.action == 'train':

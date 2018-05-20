@@ -122,18 +122,35 @@ def crop_and_put_label(image, est_dist_ths):
     all_labels.append(np.array(dist_est))
   return concat_im, all_labels
 
+def data_augmentation(im):
+  im_res = im.copy()
+  # Crop
+  if np.random.uniform(1) > 0.5:
+    l = 0
+    h = im.shape[0] / 10
+    yb = np.random.randint(l, h)
+    ye = im.shape[0] - np.random.randint(l, h)
+    h = im.shape[1] / 10
+    xb = np.random.randint(l, h)
+    xe = im.shape[1] - np.random.randint(l, h)
+    cropped = im_res[yb:ye, xb:xe]
+    im_res = cv2.resize(cropped, im.shape[:2])
+
+  return im_res
+
 
 def get_next_batch(images_list, params, est_dist_ths=False):
   im_batch = []
   all_labels_batch = []
   for _ in range(params.batch_size):
     idx = np.random.randint(len(images_list))
+    after_aug = data_augmentation(images_list[idx])
     if params.method == 'est_dist_ths' or params.method == 'one_hot':
-      images_np, all_labels = crop_and_put_label(images_list[idx], params)
+      images_np, all_labels = crop_and_put_label(after_aug, params)
     elif params.method == 'pred_matrix':
       all_labels = 0
       while np.sum(all_labels) == 0:
-        images_np, all_labels = crop_and_put_matrix_label(images_list[idx], params)
+        images_np, all_labels = crop_and_put_matrix_label(after_aug, params)
     im_batch.append(images_np)
     all_labels_batch.append(all_labels)
   return im_batch, all_labels_batch

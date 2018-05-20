@@ -19,7 +19,7 @@ import visual_eval
 params.batch_size = 1
 LR = 1.0
 lr_step = 750
-n_iters = 600
+n_iters = 100
 inc_n_rel_patches = 100
 video_output = 1
 
@@ -53,16 +53,17 @@ elif params.method == 'pred_matrix':
   classes = (params.pred_radius * 2 + 1) ** 2
 else:
   classes = 4
-model = pair_wise.SimpleNet(model_fn=params.model_2_load, classes=classes)
+model = pair_wise.SimpleNet(params, model_fn=params.model_2_load, classes=classes)
 
 im_idx = 5
 all_patches, split_order = visual_eval.split_image(images_to_test[im_idx], shuffle=False)
-#visual_eval.visualize(images_to_test[idx], split_order, None)
+#visual_eval.visualize(images_to_test[im_idx], split_order, None)
 pi = [[all_patches[i], np.array((0., 0.))] for i in range(len(all_patches))]
 #pi = [[all_patches[i], np.array((0., 0.))] for i in [0, 1, 2, 3, 5, 6, 7, 8, 10, 11, 12, 13]]
 pi = [[all_patches[i], np.array((0., 0.))] for i in [0, 1, 2, 5, 10, 6, 7, 11, 12]]
 #pi = [[all_patches[i], np.array((0., 0.))] for i in [5, 6, 7, 12, 11]]
-#pi = [[all_patches[i], np.array((0., 0.))] for i in [5, 6, 7]]
+pi = [[all_patches[i], np.array((0., 0.))] for i in [5, 6, 7]]
+pi = [[all_patches[i], np.array((0., 0.))] for i in [64, 65, 66, 79, 80, 81]]
 
 optimizer = tf.train.GradientDescentOptimizer(LR / 2 / 1)
 variables = []
