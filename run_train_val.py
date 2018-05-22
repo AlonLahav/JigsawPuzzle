@@ -43,7 +43,7 @@ def train_one_step(model, images, all_labels, optimizer):
       dist_est_prd = logits[:, 4:]
       loss_dst_upper = tf.reduce_mean(tf.nn.relu(-(dist_est_lbls[:, 1:]-dist_est_prd)))
       loss_dst_lower = tf.reduce_mean(tf.nn.relu( (dist_est_lbls[:, :1]-dist_est_prd)))
-      loss_dst = loss_dst_upper + loss_dst_lower
+      loss_dst =  loss_dst_upper + loss_dst_lower
       tf.contrib.summary.scalar('loss_dst', loss_dst)
     else:
       loss_nbr = tf.losses.sigmoid_cross_entropy(np.array(labels), logits[:, :4])
@@ -62,7 +62,7 @@ def get_images_from_folder(folder):
       im = imageio.imread(folder + '/' + fn).astype('float32')
       if im.ndim != 3: # Use only RGB images
         continue
-      im = cv2.resize(im, (params.patch_size * params.puzzle_n_parts[0], params.patch_size * params.puzzle_n_parts[1]))
+      im = cv2.resize(im, (params.patch_size * params.puzzle_n_parts[0] + params.margin_size, params.patch_size * params.puzzle_n_parts[1] + params.margin_size))
       im = im / im.max()
       im = im - im.mean()
       images.append(im)
@@ -133,4 +133,5 @@ def train_val(params):
 
 if __name__ == '__main__':
   params.action = 'train'  # 'train' / 'eval'/ 'eval-visually'
+  #os.environ['CUDA_VISIBLE_DEVICES'] = ''
   train_val(params)

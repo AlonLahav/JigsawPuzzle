@@ -13,17 +13,23 @@ import pair_wise
 
 
 def crop_and_put_matrix_label(image, params):
-  p1idx_x = np.random.randint(0, params.puzzle_n_parts[0])
-  p1idx_y = np.random.randint(0, params.puzzle_n_parts[1])
-  p2idx_x = np.random.randint(0, params.puzzle_n_parts[0])
-  p2idx_y = np.random.randint(0, params.puzzle_n_parts[1])
+  p1idx_y = np.random.randint(params.pred_radius, params.puzzle_n_parts[0] - params.pred_radius)
+  p1idx_x = np.random.randint(params.pred_radius, params.puzzle_n_parts[1] - params.pred_radius)
 
   # patch1 is the reference, patch2 is the candidate
+  rnd_idx = np.random.randint(0, (params.pred_radius * 2 + 1) ** 2)
   labels = np.zeros((params.pred_radius * 2 + 1, params.pred_radius * 2 + 1))
-  idx_y = p2idx_y - p1idx_y + params.pred_radius
-  idx_x = p2idx_x - p1idx_x + params.pred_radius
-  if idx_x >= 0 and idx_x < labels.shape[1] and idx_y >= 0 and idx_y < labels.shape[0]:
-    labels[idx_y, idx_x] = 1
+  dy, dx = np.unravel_index(rnd_idx, labels.shape)
+  if dx != params.pred_radius or dy != params.pred_radius:
+    labels[dy, dx] = 1
+  else:
+    dx = np.random.randint(params.pred_radius, params.puzzle_n_parts[1] - params.pred_radius * 2)
+    dy = np.random.randint(params.pred_radius, params.puzzle_n_parts[0] - params.pred_radius * 2)
+  dy -= params.pred_radius
+  dx -= params.pred_radius
+  p2idx_y = (p1idx_y + dy) % params.puzzle_n_parts[0]
+  p2idx_x = (p1idx_x + dx) % params.puzzle_n_parts[1]
+
 
   im1 = image[p1idx_y * params.patch_size:(p1idx_y + 1) * params.patch_size,
               p1idx_x * params.patch_size:(p1idx_x + 1) * params.patch_size, :]
@@ -122,19 +128,15 @@ def crop_and_put_label(image, est_dist_ths):
     all_labels.append(np.array(dist_est))
   return concat_im, all_labels
 
-def data_augmentation(im):
+def data_augmentation(im, params):
   im_res = im.copy()
-  # Crop
-  if np.random.uniform(1) > 0.5:
-    l = 0
-    h = im.shape[0] / 10
-    yb = np.random.randint(l, h)
-    ye = im.shape[0] - np.random.randint(l, h)
-    h = im.shape[1] / 10
-    xb = np.random.randint(l, h)
-    xe = im.shape[1] - np.random.randint(l, h)
-    cropped = im_res[yb:ye, xb:xe]
-    im_res = cv2.resize(cropped, im.shape[:2])
+
+  # Crop augmentation
+  yb = np.random.randint(params.margin_size)
+  ye = yb + params.puzzle_n_parts[0] * params.patch_size
+  xb = np.random.randint(params.margin_size)
+  xe = xb + params.puzzle_n_parts[1] * params.patch_size
+  im_res = im_res[yb:ye, xb:xe]
 
   return im_res
 
@@ -144,13 +146,11 @@ def get_next_batch(images_list, params, est_dist_ths=False):
   all_labels_batch = []
   for _ in range(params.batch_size):
     idx = np.random.randint(len(images_list))
-    after_aug = data_augmentation(images_list[idx])
+    after_aug = data_augmentation(images_list[idx], params)
     if params.method == 'est_dist_ths' or params.method == 'one_hot':
       images_np, all_labels = crop_and_put_label(after_aug, params)
     elif params.method == 'pred_matrix':
-      all_labels = 0
-      while np.sum(all_labels) == 0:
-        images_np, all_labels = crop_and_put_matrix_label(after_aug, params)
+      images_np, all_labels = crop_and_put_matrix_label(after_aug, params)
     im_batch.append(images_np)
     all_labels_batch.append(all_labels)
   return im_batch, all_labels_batch
