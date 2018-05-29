@@ -71,6 +71,22 @@ def get_images_from_folder(folder):
   return images
 
 
+def calc_pred_accurances(labels, sigmoid_res, n_occurances, n_arg_max, sum_predictions):
+  if n_occurances is None:
+    n_occurances = np.zeros_like(labels[0])
+    n_arg_max = np.zeros_like(labels[0])
+    sum_predictions = np.zeros_like(labels[0])
+  for n in range(labels.shape[0]):
+    lbl = np.argmax(labels[n])
+    n_occurances[lbl] += 1
+    prd = np.argmax(sigmoid_res[n])
+    if lbl == prd:
+      n_arg_max [lbl] += 1
+    sum_predictions[lbl] += sigmoid_res[n][lbl]
+
+  return n_occurances, n_arg_max, sum_predictions
+
+
 def train_val(params):
   train_images = get_images_from_folder(params.train_images_path)
   test_images = get_images_from_folder(params.test_images_path)
@@ -84,16 +100,19 @@ def train_val(params):
     classes = 4
   model = pair_wise.SimpleNet(params, model_fn=params.model_2_load, classes=classes)
 
-  # Learn
-  if params.action == 'train':
-    optimizer = tf.train.GradientDescentOptimizer(params.learning_rate)
+  n_labels = (params.pred_radius * 2 + 1) ** 2
+  n_occurances_trn = n_arg_max_trn = sum_predictions_trn =  n_occurances_tst = n_arg_max_tst = sum_predictions_tst = None
 
-    summary_writer = tf.contrib.summary.create_file_writer(params.logdir, flush_millis=10)
-    with summary_writer.as_default(), tf.contrib.summary.always_record_summaries():
-      n_iters_to_train = int(params.num_epocs * len(train_images) / params.batch_size)
-      tb = time.time()
-      for itr in range(n_iters_to_train):
-        # Train model
+  # Learn
+  optimizer = tf.train.GradientDescentOptimizer(params.learning_rate)
+
+  summary_writer = tf.contrib.summary.create_file_writer(params.logdir, flush_millis=10)
+  with summary_writer.as_default(), tf.contrib.summary.always_record_summaries():
+    n_iters_to_train = int(params.num_epocs * len(train_images) / params.batch_size)
+    tb = time.time()
+    for itr in range(n_iters_to_train):
+      # Train model
+      if 'train' in params.action:
         images, all_labels = data_input.get_next_batch(train_images, params)
         loss = train_one_step(model, images, all_labels, optimizer)
         tf.contrib.summary.scalar('loss', loss)
@@ -104,34 +123,38 @@ def train_val(params):
           print (round(time.time() - tb, 1), n_iters_to_train, itr, loss.numpy())
           tb = time.time()
 
-        # Test on train & test set
-        if itr % 100 == 0:
-          images, labels = data_input.get_next_batch(test_images, params)
-          labels = np.array(labels)
-          labels.shape = (len(all_labels), labels.shape[1] * labels.shape[2])
-          logits = model(images, training=False).numpy()
-          sigmoid_res = 1/(1+np.exp(-logits))
-          true_pred = 100.0 * np.sum(1 - np.any((np.round(sigmoid_res) == 1) - labels, axis=1)) / params.batch_size
-          tf.contrib.summary.scalar('accuracy', true_pred)
-          print('Accuracy On Test: ' + str(true_pred))
-
-          images, labels = data_input.get_next_batch(train_images, params)
-          labels = np.array(labels)
-          labels.shape = (len(all_labels), labels.shape[1] * labels.shape[2])
-          logits = model(images, training=False).numpy()
-          sigmoid_res = 1/(1+np.exp(-logits))
-          true_pred = 100.0 * np.sum(1 - np.any((np.round(sigmoid_res) == 1) - labels, axis=1)) / params.batch_size
-          tf.contrib.summary.scalar('train_accuracy', true_pred)
-          print('Accuracy On Train: ' + str(true_pred))
-
         # Save model
         if itr % 1000 == 0:
           model.save_weights(params.model_2_save)
-        if 0:
-          tf.keras.utils.plot_model(model, to_file=params.logdir + '/model.png', show_shapes=True)
 
+      # Test on train & test set
+      if itr % 100 == 0 or 'test' in params.action:
+        images, labels = data_input.get_next_batch(test_images, params)
+        labels = np.array(labels)
+        labels.shape = (len(labels), labels.shape[1] * labels.shape[2])
+        logits = model(images, training=False).numpy()
+        sigmoid_res = 1/(1+np.exp(-logits))
+        true_pred = 100.0 * np.sum(1 - np.any((np.round(sigmoid_res) == 1) - labels, axis=1)) / params.batch_size
+        tf.contrib.summary.scalar('accuracy', true_pred)
+        print('Accuracy On Test: ' + str(true_pred))
+        n_occurances_trn, n_arg_max_trn, sum_predictions_trn = calc_pred_accurances(labels, sigmoid_res, n_occurances_trn, n_arg_max_trn, sum_predictions_trn)
+
+        images, labels = data_input.get_next_batch(train_images, params)
+        labels = np.array(labels)
+        labels.shape = (len(labels), labels.shape[1] * labels.shape[2])
+        logits = model(images, training=False).numpy()
+        sigmoid_res = 1/(1+np.exp(-logits))
+        true_pred = 100.0 * np.sum(1 - np.any((np.round(sigmoid_res) == 1) - labels, axis=1)) / params.batch_size
+        tf.contrib.summary.scalar('train_accuracy', true_pred)
+        print('Accuracy On Train: ' + str(true_pred))
+        n_occurances_tst, n_arg_max_tst, sum_predictions_tst = calc_pred_accurances(labels, sigmoid_res, n_occurances_tst, n_arg_max_tst, sum_predictions_tst)
+
+        if itr % (100 * 100):
+          print (n_occurances_trn.reshape((3,3)))
+          print ((n_arg_max_trn / n_occurances_trn.astype('float32')).reshape((3,3)))
+          print ((sum_predictions_trn / n_occurances_trn.astype('float32')).reshape((3,3)))
 
 if __name__ == '__main__':
-  params.action = 'train'  # 'train' / 'eval'/ 'eval-visually'
+  params.action = ['test'] # 'train'  / 'test' # 'train' / 'eval'/ 'eval-visually'
   #os.environ['CUDA_VISIBLE_DEVICES'] = ''
   train_val(params)
