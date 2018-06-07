@@ -25,6 +25,8 @@ lr_step = 750000
 n_iters = 4000000
 inc_n_rel_patches = 1000
 video_output = 1
+clear_diag_rel = 0
+use_overlap_loss = 0
 
 im_idx = 7
 simulate_cnn = 'perfect' # no / perfect
@@ -60,7 +62,7 @@ def get_simulated_logits(pi, idx1, idx2, simulate_cnn, params):
   idx_y = dy + params.pred_radius
   idx_x = dx + params.pred_radius
   logits = -np.ones((params.pred_radius * 2 + 1, params.pred_radius * 2 + 1)) * 100.0
-  if idx_y >= 0 and idx_y <= 2 and idx_x >= 0 and idx_x <= 2:
+  if idx_y >= 0 and idx_y < params.pred_radius * 2 + 1 and idx_x >= 0 and idx_x < params.pred_radius * 2 + 1:
     logits[idx_y, idx_x] = 100.0
 
   return logits
@@ -68,9 +70,10 @@ def get_simulated_logits(pi, idx1, idx2, simulate_cnn, params):
 
 def calc_total_loss(pi):
   loss = 0
+  overlap = 0
   for idx1 in range(len(pi)):
     for idx2 in range(idx1 + 1, (len(pi))):
-      if simulate_cnn == 'no':
+      if 0:#  simulate_cnn == 'no':
         logits = model(images, training=False).numpy()
       else:
         logits = get_simulated_logits(pi, idx1, idx2, simulate_cnn, params)
@@ -80,9 +83,11 @@ def calc_total_loss(pi):
       conf = sigmoid_res[est_arg_max]
       d = pi[idx2][1] - pi[idx1][1]
       loss += conf * tf.losses.absolute_difference(d + params.pred_radius, est_arg_max) / n_rel_patches
-  return loss
+      overlap += np.all((pi[idx2][1] - pi[idx1][1]).numpy() < 1)
+  return loss.numpy(), overlap / (len(pi) * (len(pi) - 1) / 2)
 
 
+params.puzzle_n_parts = (20, 20)
 images_to_test = run_train_val.get_images_from_folder(params.test_images_path)
 if simulate_cnn == 'no':
   if params.method == 'est_dist_ths':
@@ -93,12 +98,12 @@ if simulate_cnn == 'no':
     classes = 4
   model = pair_wise.SimpleNet(params, model_fn=params.model_2_load, classes=classes)
 
-for n_run, n_parts in enumerate([(2,2), (2, 3), (3,3), (3, 4), (4, 4), (4, 5), (5, 5), (6, 6)][-3:]):
+for n_run, n_parts in enumerate([(2,2), (2, 3), (3,3), (3, 4), (4, 4), (4, 5), (5, 5), (6, 6), (7, 7), (8, 8), (9, 9), (10, 10), (11, 11), (12, 12), (13, 13), (14, 14), (15, 15), (20, 20), (30, 30)][5:6]):
   t_beg = time.time()
   params.puzzle_n_parts = n_parts
   im2use = images_to_test[im_idx]
-  if params.puzzle_n_parts[0] * params.patch_size > im2use.shape[0] or params.puzzle_n_parts[1] * params.patch_size > im2use.shape[1]:
-    print ('\n\n!!! Resizing image (its resolution is too low).\n\n')
+  if 1: # params.puzzle_n_parts[0] * params.patch_size > im2use.shape[0] or params.puzzle_n_parts[1] * params.patch_size > im2use.shape[1]:
+    #print ('\n\n!!! Resizing image (its resolution is too low).\n\n')
     im2use = cv2.resize(im2use, (params.puzzle_n_parts[0] * params.patch_size + 1, params.puzzle_n_parts[1] * params.patch_size + 1))
   all_patches, split_order = visual_eval.split_image(im2use, shuffle=False)
   #visual_eval.visualize(im2use, split_order, None)
@@ -123,21 +128,26 @@ for n_run, n_parts in enumerate([(2,2), (2, 3), (3,3), (3, 4), (4, 4), (4, 5), (
 
     imageio.imwrite('output_tmp/im.jpg', im2use)
 
+  n_total_patches = params.puzzle_n_parts[0] * params.puzzle_n_parts[1]
   n_rel_patches = 1
   for n in range(n_iters):
-    if n % 4 == 0:
-      total_loss = calc_total_loss(pi)
-    if n % inc_n_rel_patches == 0 and n != 0 and n_rel_patches < 8:
+    if n % (int(n_total_patches ** 2 / 40)) == 0:
+      total_loss, total_overlap = calc_total_loss(pi)
+      print (n, n_iters, total_loss, round(total_overlap, 2), n_rel_patches)
+    if total_overlap < 0.75 / n_rel_patches and n_rel_patches < 8:
       n_rel_patches *= 2
-    print (n, n_iters, total_loss.numpy())
+      print ('Overlap is small -> increasing n_rel_patches')
     if n % lr_step == 0 and n > 0 and LR > 0.2:
       LR *= 0.5
     idx1 = np.random.randint(len(pi))
     for _ in range(n_rel_patches):
       loss = None
       while 1:
-        idx2 = np.random.randint(len(pi))
-        if idx1 != idx2:
+        idx2 = np.random.randint(len(pi ))
+        too_far = 1
+        if np.linalg.norm(pi[idx1][1].numpy() - pi[idx2][1].numpy()) < 2:
+          too_far = 0
+        if idx1 != idx2 and not too_far:
           break
       images = np.concatenate([pi[idx1][0], pi[idx2][0]], axis=2)[np.newaxis, :]
       if simulate_cnn == 'no':
@@ -147,6 +157,8 @@ for n_run, n_parts in enumerate([(2,2), (2, 3), (3,3), (3, 4), (4, 4), (4, 5), (
       with tfe.GradientTape() as tape:
         sigmoid_res = 1 / (1 + np.exp(-logits)).squeeze()
         sigmoid_res.shape = (params.pred_radius * 2 + 1, params.pred_radius * 2 + 1)
+        if clear_diag_rel:
+          sigmoid_res *= np.array([[0, 1, 0], [1, 0, 1], [0, 1, 0]])
         exp_shift_matrix = sigmoid_res
         if 0: # TODO: TF cannot derivate it - there must be a way..
           current_shift = get_current_shift_matrix(pi[idx2][1], pi[idx1][1])
@@ -154,31 +166,38 @@ for n_run, n_parts in enumerate([(2,2), (2, 3), (3,3), (3, 4), (4, 4), (4, 5), (
           est_arg_max = np.unravel_index(np.argmax(sigmoid_res), sigmoid_res.shape)
           conf = sigmoid_res[est_arg_max]
           d = pi[idx2][1] - pi[idx1][1]
-          loss = conf * tf.losses.absolute_difference(d + params.pred_radius,  est_arg_max) / n_rel_patches
+          if use_overlap_loss:
+            ovrlp_loss = 0.3 * tf.reduce_min(tf.nn.relu(0.9 - tf.abs(d)))
+          else:
+            ovrlp_loss = 0
+          loss = ovrlp_loss + conf * tf.losses.absolute_difference(d + params.pred_radius,  est_arg_max) / n_rel_patches
       if not loss is None:
         grads = tape.gradient(loss, variables)
         optimizer.apply_gradients(zip(grads[idx1:idx1+1], variables[idx1:idx1+1]), tf.train.get_or_create_global_step())
 
-    fig = plt.figure(1)
-    fig.clf()
-    pi_ = []
-    for p in pi:
-      pi_.append([p[0], p[1].numpy()])
-
-    visual_eval.visualize(None, None, pi_, show=False)
-    if video_output:
-      plt.title(n)
+    if video_output and (n % 10 == 0):
+      fig = plt.figure(1)
+      fig.clf()
+      pi_ = []
+      for p in pi:
+        pi_.append([p[0], p[1].numpy()])
+      visual_eval.visualize(None, None, pi_, show=False)
+      plt.title(str((n, total_loss)))
       img = figure_2_np_array(fig)
       video.append_data(img)
 
-    if total_loss.numpy() == 0:
-      break
-    if total_loss.numpy() < 2 / 2 ** n_rel_patches and n_rel_patches < 10:
-      n_rel_patches *= 2
-      print ('---> n_rel_patches', n_rel_patches)
+    if simulate_cnn == 'no':
+      if total_overlap < 0.1:
+        break
+    else:
+      if total_loss == 0:
+        break
+      if total_loss < 2 / 2 ** n_rel_patches and n_rel_patches < 10:
+        n_rel_patches *= 2
+        print ('---> n_rel_patches', n_rel_patches)
 
   if video_output:
     plt.close()
     video.close()
     with open('output_tmp/log.txt', 'at') as f:
-      f.write('# patches: ' + str(params.puzzle_n_parts) + ' , # iters: ' + str(n) + ' , final loss : ' + str(total_loss.numpy()) + ' , run time: ' + str(round(time.time() - t_beg, 1)) + '\n')
+      f.write('# patches: ' + str(params.puzzle_n_parts) + ' , # iters: ' + str(n) + ' , final loss : ' + str(total_loss) + ' , run time: ' + str(round(time.time() - t_beg, 1)) + '\n')

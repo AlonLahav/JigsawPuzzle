@@ -23,6 +23,6 @@ params.max_images_per_folder = 500 # np.inf
 params.logdir = '/home/alonlahav/git-projects/JigsawPuzzle/models/16'
 params.model_2_save = params.logdir + '/last_model.keras'
 params.model_2_load = params.model_2_save
-params.pred_radius = 1
+params.pred_radius = 2
 params.method = 'pred_matrix' #  pred_matrix / est_dist_ths / one_hot
 params.learning_rate = .1 / params.batch_size
