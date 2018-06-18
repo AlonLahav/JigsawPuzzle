@@ -14,11 +14,12 @@ import data_input
 
 '''
 TO DO:
-- Fix memory(?) problem
+- increase radius size
+- if susspect overfitting, increase data size (better data management)
+-  
+
 - Check results visually
 - Check filters visually
-- GitHub
-- Run on cloud
 - Compare eager VS graph
 
 More low priority TODOs:
@@ -91,6 +92,14 @@ def train_val(params):
   train_images = get_images_from_folder(params.train_images_path)
   test_images = get_images_from_folder(params.test_images_path)
 
+  global_step = tf.train.get_or_create_global_step()
+  try:
+    with open(params.logdir + '/solver.txt') as f:
+      n = f.read()
+    global_step.assign(int(n))
+  except:
+    pass
+
   # Init net
   if params.method == 'est_dist_ths':
     classes = 4 + 1
@@ -107,6 +116,7 @@ def train_val(params):
   optimizer = tf.train.GradientDescentOptimizer(params.learning_rate)
 
   summary_writer = tf.contrib.summary.create_file_writer(params.logdir, flush_millis=10)
+  save_summary_each = 1
   with summary_writer.as_default(), tf.contrib.summary.always_record_summaries():
     n_iters_to_train = int(params.num_epocs * len(train_images) / params.batch_size)
     tb = time.time()
@@ -115,8 +125,11 @@ def train_val(params):
       if 'train' in params.action:
         images, all_labels = data_input.get_next_batch(train_images, params)
         loss = train_one_step(model, images, all_labels, optimizer)
-        tf.contrib.summary.scalar('loss', loss)
-        tf.contrib.summary.all_summary_ops()
+        if itr % save_summary_each == 0:
+          tf.contrib.summary.scalar('loss', loss)
+          tf.contrib.summary.all_summary_ops()
+          if float(itr) / save_summary_each > 100 and save_summary_each < 1e3:
+            save_summary_each *= 10
 
         # Print process time
         if itr % 200 == 0:
@@ -126,6 +139,8 @@ def train_val(params):
         # Save model
         if itr % 1000 == 0:
           model.save_weights(params.model_2_save)
+          with open(params.logdir + '/solver.txt', 'wt') as f:
+            f.write(str(global_step.numpy()))
 
       # Test on train & test set
       if itr % 100 == 0 or 'test' in params.action:
@@ -149,12 +164,15 @@ def train_val(params):
         print('Accuracy On Train: ' + str(true_pred))
         n_occurances_tst, n_arg_max_tst, sum_predictions_tst = calc_pred_accurances(labels, sigmoid_res, n_occurances_tst, n_arg_max_tst, sum_predictions_tst)
 
-        if itr % (100 * 100):
-          print (n_occurances_trn.reshape((3,3)))
-          print ((n_arg_max_trn / n_occurances_trn.astype('float32')).reshape((3,3)))
-          print ((sum_predictions_trn / n_occurances_trn.astype('float32')).reshape((3,3)))
+        if itr % (100 * 10) == 0:
+          print('n_occurances_trn')
+          print (n_occurances_trn.reshape((params.pred_radius * 2 + 1,params.pred_radius * 2 + 1)))
+          print('Accuracy arg-max')
+          print ((n_arg_max_trn / n_occurances_trn.astype('float32')).reshape((params.pred_radius * 2 + 1,params.pred_radius * 2 + 1)))
+          print('sum_predictions_trn')
+          print ((sum_predictions_trn / n_occurances_trn.astype('float32')).reshape((params.pred_radius * 2 + 1,params.pred_radius * 2 + 1)))
 
 if __name__ == '__main__':
-  params.action = ['test'] # 'train'  / 'test' # 'train' / 'eval'/ 'eval-visually'
+  params.action = ['train'] # 'train'  / 'test' # 'train' / 'eval'/ 'eval-visually'
   #os.environ['CUDA_VISIBLE_DEVICES'] = ''
   train_val(params)
