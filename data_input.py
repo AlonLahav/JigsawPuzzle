@@ -1,5 +1,7 @@
 import time
 import os, sys
+
+from scipy.spatial import Voronoi, voronoi_plot_2d
 import imageio
 import cv2
 import pylab as plt
@@ -7,6 +9,9 @@ import numpy as np
 
 import tensorflow as tf
 import tensorflow.contrib.eager as tfe
+
+import triangle
+import triangle.plot as tr_plot
 
 from params import *
 import pair_wise
@@ -156,5 +161,54 @@ def get_next_batch(images_list, params, est_dist_ths=False):
   return im_batch, all_labels_batch
 
 
+def get_images_from_folder(folder):
+  images = []
+  for fn in os.listdir(folder):
+    if fn.endswith('jpeg') or fn.endswith('jpg'):
+      im = imageio.imread(folder + '/' + fn).astype('float32')
+      if im.ndim != 3: # Use only RGB images
+        continue
+      im = cv2.resize(im, (params.patch_size * params.puzzle_n_parts[0] + params.margin_size, params.patch_size * params.puzzle_n_parts[1] + params.margin_size))
+      im = im / im.max()
+      im = im - im.mean()
+      images.append(im)
+      if len(images) >= params.max_images_per_folder:
+        break
+  return images
+
+
+def unstructured_cut(im):
+  voronoi = 1
+  n = 40
+  ptx = np.random.randint(0, im.shape[1], size=(n, 1))
+  pty = np.random.randint(0, im.shape[0], size=(n, 1))
+  pts = np.hstack((ptx, pty))
+  if voronoi:
+    vor = Voronoi(pts)
+  else:
+    t = triangle.triangulate({'vertices': pts})
+  plt.figure()
+  ax = plt.subplot(111, aspect='equal')
+  voronoi_plot_2d(vor, ax)
+  plt.imshow(im[::-1,:])
+  #tr_plot.plot(ax, **t)
+  plt.show()
+
+
 if __name__ == '__main__':
-  pass
+  params.max_images_per_folder = 5
+  train_images = get_images_from_folder(params.train_images_path)
+  im = train_images[1] - train_images[1].min()
+  im /= im.max() / 255
+  im = im.astype('uint8')
+  unstructured_cut(im)
+
+
+if 0:
+  points = np.array([[0, 0], [0, 1], [0, 2], [1, 0], [1, 1], [1, 2],
+                     [2, 0], [2, 1], [2, 2]])
+
+  vor = Voronoi(points)
+
+  voronoi_plot_2d(vor)
+  plt.show()
