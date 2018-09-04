@@ -17,9 +17,9 @@ from params import *
 import pair_wise
 
 
-def crop_and_put_matrix_label(image, params):
-  p1idx_y = np.random.randint(params.pred_radius, params.puzzle_n_parts[0] - params.pred_radius)
-  p1idx_x = np.random.randint(params.pred_radius, params.puzzle_n_parts[1] - params.pred_radius)
+def crop_and_put_matrix_label(image1, prev_image, params):
+  p1idx_y = np.random.randint(params.pred_radius, params.puzzle_n_parts[0] - params.pred_radius + 1)
+  p1idx_x = np.random.randint(params.pred_radius, params.puzzle_n_parts[1] - params.pred_radius + 1)
 
   # patch1 is the reference, patch2 is the candidate
   rnd_idx = np.random.randint(0, (params.pred_radius * 2 + 1) ** 2)
@@ -27,18 +27,22 @@ def crop_and_put_matrix_label(image, params):
   dy, dx = np.unravel_index(rnd_idx, labels.shape)
   if dx != params.pred_radius or dy != params.pred_radius:
     labels[dy, dx] = 1
+    image2 = image1
   else:
-    dx = np.random.randint(params.pred_radius, params.puzzle_n_parts[1] - params.pred_radius * 2)
-    dy = np.random.randint(params.pred_radius, params.puzzle_n_parts[0] - params.pred_radius * 2)
+    # Get different image and crop randomaly
+    p1idx_y = np.random.randint(params.pred_radius, params.puzzle_n_parts[0] - params.pred_radius + 1)
+    p1idx_x = np.random.randint(params.pred_radius, params.puzzle_n_parts[1] - params.pred_radius + 1)
+    image2 = prev_image
+
   dy -= params.pred_radius
   dx -= params.pred_radius
   p2idx_y = (p1idx_y + dy) % params.puzzle_n_parts[0]
   p2idx_x = (p1idx_x + dx) % params.puzzle_n_parts[1]
 
 
-  im1 = image[p1idx_y * params.patch_size:(p1idx_y + 1) * params.patch_size,
+  im1 = image1[p1idx_y * params.patch_size:(p1idx_y + 1) * params.patch_size,
               p1idx_x * params.patch_size:(p1idx_x + 1) * params.patch_size, :]
-  im2 = image[p2idx_y * params.patch_size:(p2idx_y + 1) * params.patch_size,
+  im2 = image2[p2idx_y * params.patch_size:(p2idx_y + 1) * params.patch_size,
               p2idx_x * params.patch_size:(p2idx_x + 1) * params.patch_size, :]
 
   concat_im = np.concatenate([im1, im2], axis=2)
@@ -145,35 +149,67 @@ def data_augmentation(im, params):
 
   return im_res
 
-
+prev_image = None
 def get_next_batch(images_list, params, est_dist_ths=False):
+  global prev_image
   im_batch = []
   all_labels_batch = []
-  for _ in range(params.batch_size):
+  for _ in range(params.batch_size + (prev_image is None)):
     idx = np.random.randint(len(images_list))
-    after_aug = data_augmentation(images_list[idx], params)
+    if params.load_images_to_memory:
+      im = images_list[idx]
+    else:
+      read_beg = time.time()
+      im = imageio.imread(images_list[idx]).astype('float32')
+      #tf.contrib.summary.scalar('read_one_image', time.time() - read_beg)
+      if 1:
+        im = cv2.resize(im, (params.patch_size * params.puzzle_n_parts[0] + params.margin_size,
+                             params.patch_size * params.puzzle_n_parts[1] + params.margin_size))
+      else:
+        im = im[:params.patch_size * params.puzzle_n_parts[0] + params.margin_size,
+             :params.patch_size * params.puzzle_n_parts[1] + params.margin_size, :]
+      if params.preprocess == 'mean-0':
+        im = im / im.max()
+        im = im - im.mean()
+    after_aug = data_augmentation(im, params)
+    if prev_image is None:
+      prev_image = after_aug
+      continue
     if params.method == 'est_dist_ths' or params.method == 'one_hot':
       images_np, all_labels = crop_and_put_label(after_aug, params)
     elif params.method == 'pred_matrix':
-      images_np, all_labels = crop_and_put_matrix_label(after_aug, params)
+      images_np, all_labels = crop_and_put_matrix_label(after_aug, prev_image, params)
     im_batch.append(images_np)
     all_labels_batch.append(all_labels)
+    prev_image = after_aug
   return im_batch, all_labels_batch
 
 
 def get_images_from_folder(folder):
+  print ('Getting images from folder: ' + folder)
   images = []
   for fn in os.listdir(folder):
+    if len(images) % 100 == 0:
+      print('.', end='', flush=True)
     if fn.endswith('jpeg') or fn.endswith('jpg'):
       im = imageio.imread(folder + '/' + fn).astype('float32')
-      if im.ndim != 3: # Use only RGB images
+      if im.ndim != 3:  # Use only RGB images
         continue
-      im = cv2.resize(im, (params.patch_size * params.puzzle_n_parts[0] + params.margin_size, params.patch_size * params.puzzle_n_parts[1] + params.margin_size))
-      im = im / im.max()
-      im = im - im.mean()
+      if im.shape[0] < params.patch_size * params.puzzle_n_parts[0] + params.margin_size:
+        continue
+      if im.shape[1] < params.patch_size * params.puzzle_n_parts[1] + params.margin_size:
+        continue
+      if params.load_images_to_memory:
+        im = cv2.resize(im, (params.patch_size * params.puzzle_n_parts[0] + params.margin_size, params.patch_size * params.puzzle_n_parts[1] + params.margin_size))
+        if params.preprocess == 'mean-0':
+          im = im / im.max()
+          im = im - im.mean()
+      else:
+        im = folder + '/' + fn
       images.append(im)
       if len(images) >= params.max_images_per_folder:
         break
+  print (' -- Done.\n')
   return images
 
 
