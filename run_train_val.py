@@ -14,11 +14,9 @@ import data_input
 
 '''
 TO DO:
-- increase radius size
-- if susspect overfitting, increase data size (better data management)
--  
+- SGD -> momentum / ADAM
+- increase radius size  
 
-- Check results visually
 - Check filters visually
 - Compare eager VS graph
 
@@ -28,10 +26,50 @@ More low priority TODOs:
 
 tfe.enable_eager_execution()
 
+def visualize_one_minibatch(images, pred_labels, pred_score, gt_labels=None):
+  f = 0
+  if gt_labels is None:
+    gt_labels = [None] * len(pred_labels)
+  for im_idx in range(8):
+    img = images[im_idx]
+    score = pred_score[im_idx]
+    gt = gt_labels[im_idx]
+    f += 1
+    plt.figure(f)
+    plt.subplot(3,3,5)
+    plt.imshow(img[:, :, :3].astype('int16'))
+    g = np.argwhere(gt.flatten()).squeeze() + 1
+    for i in range(9):
+      plt.subplot(3, 3, i + 1)
+      if g == i + 1:
+        gt_str = '+'
+      else:
+        gt_str = '-'
+      plt.title(gt_str + str(np.round(score[i] * 100)))
+      if score[i] > 0.5:
+        plt.imshow(img[:, :, 3:].astype('int16'))
+      plt.axis('off')
+    if 0:
+      r = np.argwhere(lbl.flatten()).squeeze()+1
+      g = np.argwhere(gt.flatten()).squeeze()+1
+      #if r == g:
+      #  continue
+      #if r.size == 0:
+      #  continue
+      if isinstance(r, np.int64):
+        plt.subplot(3,3,r)
+        plt.imshow(img[:, :, 3:].astype('int16'))
+      ttl_str = 'r = ' + str(r) + ' , g = ' + str(g)
+      if r.size > 1 or g != r or not isinstance(g, np.int64):
+        if isinstance(g, np.int64):
+          plt.subplot(3, 3, g)
+          plt.imshow(img[:, :, 3:].astype('int16'), alpha=0.5)
+      plt.suptitle(ttl_str)
+    plt.show()
 
 def train_one_step(model, images, all_labels, optimizer):
   with tfe.GradientTape() as tape:
-    logits = model(np.array(images), training=True)
+    logits = model(np.array(images), training=True, visualize=0)
     if params.method == 'pred_matrix':
       labels = np.array(all_labels)
       labels.shape = (len(all_labels), labels.shape[1] * labels.shape[2])
@@ -55,23 +93,6 @@ def train_one_step(model, images, all_labels, optimizer):
   return loss
 
 
-# Get images to work on
-def get_images_from_folder(folder):
-  images = []
-  for fn in os.listdir(folder):
-    if fn.endswith('jpeg') or fn.endswith('jpg'):
-      im = imageio.imread(folder + '/' + fn).astype('float32')
-      if im.ndim != 3: # Use only RGB images
-        continue
-      im = cv2.resize(im, (params.patch_size * params.puzzle_n_parts[0] + params.margin_size, params.patch_size * params.puzzle_n_parts[1] + params.margin_size))
-      im = im / im.max()
-      im = im - im.mean()
-      images.append(im)
-      if len(images) >= params.max_images_per_folder:
-        break
-  return images
-
-
 def calc_pred_accurances(labels, sigmoid_res, n_occurances, n_arg_max, sum_predictions):
   if n_occurances is None:
     n_occurances = np.zeros_like(labels[0])
@@ -89,8 +110,8 @@ def calc_pred_accurances(labels, sigmoid_res, n_occurances, n_arg_max, sum_predi
 
 
 def train_val(params):
-  train_images = get_images_from_folder(params.train_images_path)
-  test_images = get_images_from_folder(params.test_images_path)
+  train_images = data_input.get_images_from_folder(params.train_images_path)
+  test_images = data_input.get_images_from_folder(params.test_images_path)
 
   global_step = tf.train.get_or_create_global_step()
   try:
@@ -107,13 +128,14 @@ def train_val(params):
     classes = (params.pred_radius * 2 + 1) ** 2
   else:
     classes = 4
-  model = pair_wise.SimpleNet(params, model_fn=params.model_2_load, classes=classes)
+  #model = pair_wise.SimpleNet(params, model_fn=params.model_2_load, classes=classes)
+  model = pair_wise.NetOnNet(params, model_fn=params.model_2_load, classes=classes)
 
   n_labels = (params.pred_radius * 2 + 1) ** 2
   n_occurances_trn = n_arg_max_trn = sum_predictions_trn =  n_occurances_tst = n_arg_max_tst = sum_predictions_tst = None
 
   # Learn
-  optimizer = tf.train.GradientDescentOptimizer(params.learning_rate)
+  optimizer = tf.train.AdamOptimizer(params.learning_rate)
 
   summary_writer = tf.contrib.summary.create_file_writer(params.logdir, flush_millis=10)
   save_summary_each = 1
@@ -123,10 +145,19 @@ def train_val(params):
     for itr in range(n_iters_to_train):
       # Train model
       if 'train' in params.action:
-        images, all_labels = data_input.get_next_batch(train_images, params)
-        loss = train_one_step(model, images, all_labels, optimizer)
+        if 1:
+          get_input_beg = time.time()
+          images, all_labels, time_log = data_input.get_next_batch(train_images, params)
+          get_input_time = time.time() - get_input_beg
+          itr_beg = time.time()
+          loss = train_one_step(model, images, all_labels, optimizer)
+          train_step_time = time.time() - itr_beg
         if itr % save_summary_each == 0:
           tf.contrib.summary.scalar('loss', loss)
+          tf.contrib.summary.scalar('timing/train_step_time', train_step_time)
+          tf.contrib.summary.scalar('timing/total_get_input_time', get_input_time)
+          tf.contrib.summary.scalar('timing/read-image', time_log[0])
+          tf.contrib.summary.scalar('timing/resize', time_log[1])
           tf.contrib.summary.all_summary_ops()
           if float(itr) / save_summary_each > 100 and save_summary_each < 1e3:
             save_summary_each *= 10
@@ -144,23 +175,24 @@ def train_val(params):
 
       # Test on train & test set
       if itr % 100 == 0 or 'test' in params.action:
-        images, labels = data_input.get_next_batch(test_images, params)
+        images, labels, _ = data_input.get_next_batch(test_images, params)
         labels = np.array(labels)
         labels.shape = (len(labels), labels.shape[1] * labels.shape[2])
         logits = model(images, training=False).numpy()
         sigmoid_res = 1/(1+np.exp(-logits))
         true_pred = 100.0 * np.sum(1 - np.any((np.round(sigmoid_res) == 1) - labels, axis=1)) / params.batch_size
-        tf.contrib.summary.scalar('accuracy', true_pred)
+        tf.contrib.summary.scalar('accuracy/test', true_pred)
         print('Accuracy On Test: ' + str(true_pred))
         n_occurances_trn, n_arg_max_trn, sum_predictions_trn = calc_pred_accurances(labels, sigmoid_res, n_occurances_trn, n_arg_max_trn, sum_predictions_trn)
+        #visualize_one_minibatch(images, sigmoid_res>0.5, sigmoid_res, labels)
 
-        images, labels = data_input.get_next_batch(train_images, params)
+        images, labels, _ = data_input.get_next_batch(train_images, params)
         labels = np.array(labels)
         labels.shape = (len(labels), labels.shape[1] * labels.shape[2])
         logits = model(images, training=False).numpy()
         sigmoid_res = 1/(1+np.exp(-logits))
         true_pred = 100.0 * np.sum(1 - np.any((np.round(sigmoid_res) == 1) - labels, axis=1)) / params.batch_size
-        tf.contrib.summary.scalar('train_accuracy', true_pred)
+        tf.contrib.summary.scalar('accuracy/train', true_pred)
         print('Accuracy On Train: ' + str(true_pred))
         n_occurances_tst, n_arg_max_tst, sum_predictions_tst = calc_pred_accurances(labels, sigmoid_res, n_occurances_tst, n_arg_max_tst, sum_predictions_tst)
 

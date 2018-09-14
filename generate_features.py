@@ -4,6 +4,7 @@ import six.moves.urllib as urllib
 import sys
 import tarfile
 import tensorflow as tf
+import tensorflow.contrib.graph_editor as ge
 import zipfile
 
 from collections import defaultdict
@@ -15,17 +16,18 @@ from matplotlib import pyplot as plt
 sys.path.append("/home/alonlahav/git-projects/models/research")
 sys.path.append('/home/alonlahav/git-projects/models/research/object_detection')
 
+# TODO: add some layers as features (not only one)
+# TODO: compare some networks (MobileNet - for speed-up)
 
 class GenerateFeatures():
-  def __init__(self, MODEL_NAME):
-    ftr_layer = 'block2'
+  def __init__(self, MODEL_NAME, ftr_layer):
     MODEL_FILE = MODEL_NAME + '.tar.gz'
     DOWNLOAD_BASE = 'http://download.tensorflow.org/models/object_detection/'
 
     # Path to frozen detection graph. This is the actual model that is used for the object detection.
     PATH_TO_FROZEN_GRAPH = MODEL_NAME + '/frozen_inference_graph.pb'
 
-    if not os.path.isfile(MODEL_FILE):
+    if not os.path.isfile(PATH_TO_FROZEN_GRAPH):
       opener = urllib.request.URLopener()
       opener.retrieve(DOWNLOAD_BASE + MODEL_FILE, MODEL_FILE)
       tar_file = tarfile.open(MODEL_FILE)
@@ -55,15 +57,19 @@ class GenerateFeatures():
       (im_height, im_width, 3)).astype(np.uint8)
 
   def get_features(self, image):
-    # Run inference
-    output_dict = self._sess.run(self._ftr_tensor,
-                           feed_dict={self._image_tensor: np.expand_dims(image, 0)})
+    if image.ndim == 3:
+      im = np.expand_dims(image, 0)
+    else:
+      im = image
+    output_dict = self._sess.run(self._ftr_tensor, feed_dict={self._image_tensor: im})
     return output_dict
 
 
 if __name__ == '__main__':
   MODEL_NAME = 'ssd_resnet50_v1_fpn_shared_box_predictor_640x640_coco14_sync_2018_07_03'  # ssd_mobilenet_v1_coco_2017_11_17 / ssd_resnet50_v1_fpn_shared_box_predictor_640x640_coco14_sync_2018_07_03
-  generate_features = GenerateFeatures(MODEL_NAME)
+  MODEL_NAME = 'faster_rcnn_resnet50_coco_2018_01_28_NoResizer'
+  ftr_layer = 'block2/unit_3' # block2/unit_3 , block1/unit_1
+  generate_features = GenerateFeatures(MODEL_NAME, ftr_layer)
   PATH_TO_TEST_IMAGES_DIR = 'test_images'
   TEST_IMAGE_PATHS = [ os.path.join(PATH_TO_TEST_IMAGES_DIR, 'image{}.jpg'.format(i)) for i in range(1, 3) ]
 

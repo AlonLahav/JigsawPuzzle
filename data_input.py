@@ -40,12 +40,15 @@ def crop_and_put_matrix_label(image1, prev_image, params):
   p2idx_x = (p1idx_x + dx) % params.puzzle_n_parts[1]
 
 
-  im1 = image1[p1idx_y * params.patch_size:(p1idx_y + 1) * params.patch_size,
-              p1idx_x * params.patch_size:(p1idx_x + 1) * params.patch_size, :]
-  im2 = image2[p2idx_y * params.patch_size:(p2idx_y + 1) * params.patch_size,
-              p2idx_x * params.patch_size:(p2idx_x + 1) * params.patch_size, :]
+  if image1 is None:
+    concat_im = None
+  else:
+    im1 = image1[p1idx_y * params.patch_size:(p1idx_y + 1) * params.patch_size,
+                p1idx_x * params.patch_size:(p1idx_x + 1) * params.patch_size, :]
+    im2 = image2[p2idx_y * params.patch_size:(p2idx_y + 1) * params.patch_size,
+                p2idx_x * params.patch_size:(p2idx_x + 1) * params.patch_size, :]
 
-  concat_im = np.concatenate([im1, im2], axis=2)
+    concat_im = np.concatenate([im1, im2], axis=2)
 
   return concat_im, labels
 
@@ -154,17 +157,22 @@ def get_next_batch(images_list, params, est_dist_ths=False):
   global prev_image
   im_batch = []
   all_labels_batch = []
-  for _ in range(params.batch_size + (prev_image is None)):
+  time_log = [0, 0, 0]
+  if len(images_list) == 0:
+    prev_image = after_aug = None
+  else:
     idx = np.random.randint(len(images_list))
     if params.load_images_to_memory:
       im = images_list[idx]
     else:
       read_beg = time.time()
       im = imageio.imread(images_list[idx]).astype('float32')
-      #tf.contrib.summary.scalar('read_one_image', time.time() - read_beg)
+      time_log[0] += time.time() - read_beg
       if 1:
+        tb = time.time()
         im = cv2.resize(im, (params.patch_size * params.puzzle_n_parts[0] + params.margin_size,
                              params.patch_size * params.puzzle_n_parts[1] + params.margin_size))
+        time_log[1] += time.time() - tb
       else:
         im = im[:params.patch_size * params.puzzle_n_parts[0] + params.margin_size,
              :params.patch_size * params.puzzle_n_parts[1] + params.margin_size, :]
@@ -173,8 +181,8 @@ def get_next_batch(images_list, params, est_dist_ths=False):
         im = im - im.mean()
     after_aug = data_augmentation(im, params)
     if prev_image is None:
-      prev_image = after_aug
-      continue
+      prev_image = np.zeros_like(im)
+  for _ in range(params.batch_size + (prev_image is None)):
     if params.method == 'est_dist_ths' or params.method == 'one_hot':
       images_np, all_labels = crop_and_put_label(after_aug, params)
     elif params.method == 'pred_matrix':
@@ -182,7 +190,7 @@ def get_next_batch(images_list, params, est_dist_ths=False):
     im_batch.append(images_np)
     all_labels_batch.append(all_labels)
     prev_image = after_aug
-  return im_batch, all_labels_batch
+  return im_batch, all_labels_batch, time_log
 
 
 def get_images_from_folder(folder):
@@ -227,11 +235,10 @@ def unstructured_cut(im):
   ax = plt.subplot(111, aspect='equal')
   voronoi_plot_2d(vor, ax)
   plt.imshow(im[::-1,:])
-  #tr_plot.plot(ax, **t)
   plt.show()
 
 
-if __name__ == '__main__':
+if __name__ == '__main__1':
   params.max_images_per_folder = 5
   train_images = get_images_from_folder(params.train_images_path)
   im = train_images[1] - train_images[1].min()
@@ -239,12 +246,9 @@ if __name__ == '__main__':
   im = im.astype('uint8')
   unstructured_cut(im)
 
-
-if 0:
-  points = np.array([[0, 0], [0, 1], [0, 2], [1, 0], [1, 1], [1, 2],
-                     [2, 0], [2, 1], [2, 2]])
-
-  vor = Voronoi(points)
-
-  voronoi_plot_2d(vor)
-  plt.show()
+if __name__ == '__main__':
+  acc = np.zeros((3, 3))
+  for _ in range(1000):
+    _, all_labels_batch = get_next_batch([], params)
+    acc += np.sum(np.array(all_labels_batch), axis=0)
+    print(acc)

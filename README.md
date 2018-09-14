@@ -30,3 +30,69 @@ Now add them to the end of .bashrc file:
 export PATH=/usr/local/cuda-9.0/bin${PATH:+:${PATH}}
 export LD_LIBRARY_PATH=/usr/local/cuda-9.0/lib64${LD_LIBRARY_PATH:+:${LD_LIBRARY_PATH}}
 ```
+
+## GoogleAPI
+### Bypass resize
+At `image_resizer_builder.py` change `image_resizer_config.keep_aspect_ratio_resizer` to `preprocessor.resize_bypass`
+At `preprocessor.py` add the following:
+```
+def resize_bypass(image,
+                    masks=None,
+                    min_dimension=None,
+                    max_dimension=None,
+                    method=tf.image.ResizeMethod.BILINEAR,
+                    align_corners=False,
+                    pad_to_max_dimension=False,
+                    per_channel_pad_value=(0, 0, 0)):
+   if len(image.get_shape()) != 3:
+    raise ValueError('Image should be 3D tensor')
+
+  with tf.name_scope('ResizeToRange', values=[image, min_dimension]):
+    if image.get_shape().is_fully_defined():
+      new_size = _compute_new_static_size(image, min_dimension, max_dimension)
+    else:
+      new_size = _compute_new_dynamic_size(image, min_dimension, max_dimension)
+    new_image = image
+
+    result = [new_image]
+    result.append(new_size)
+    return result
+```
+### Export new .pb file
+```
+INPUT_TYPE=image_tensor
+PIPELINE_CONFIG_PATH=/home/alonlahav/git-projects/faster_rcnn_resnet50_coco_2018_01_28/pipeline.config
+TRAINED_CKPT_PREFIX=/home/alonlahav/git-projects/faster_rcnn_resnet50_coco_2018_01_28/model.ckpt
+EXPORT_DIR=/home/alonlahav/git-projects/faster_rcnn_resnet50_coco_2018_01_28/export 
+cd git-projects/models/research/
+export PYTHONPATH=/home/alonlahav/git-projects/models/slim:/home/alonlahav/git-projects/models:/home/alonlahav/git-projects/models/research
+python3 object_detection/export_inference_graph.py     --input_type=${INPUT_TYPE}     --pipeline_config_path=${PIPELINE_CONFIG_PATH}     --trained_checkpoint_prefix=${TRAINED_CKPT_PREFIX}     --output_directory=${EXPORT_DIR}
+
+```
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
