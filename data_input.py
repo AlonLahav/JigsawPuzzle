@@ -161,12 +161,16 @@ def get_next_batch(images_list, params, est_dist_ths=False):
   if len(images_list) == 0:
     prev_image = after_aug = None
   else:
-    idx = np.random.randint(len(images_list))
     if params.load_images_to_memory:
+      idx = np.random.randint(len(images_list))
       im = images_list[idx]
     else:
       read_beg = time.time()
-      im = imageio.imread(images_list[idx]).astype('float32')
+      im_loaded = False
+      while not im_loaded:
+        idx = np.random.randint(len(images_list))
+        im = imageio.imread(images_list[idx]).astype('float32')
+        im_loaded = is_image_ok(im)
       time_log[0] += time.time() - read_beg
       if 1:
         tb = time.time()
@@ -192,6 +196,15 @@ def get_next_batch(images_list, params, est_dist_ths=False):
     prev_image = after_aug
   return im_batch, all_labels_batch, time_log
 
+def is_image_ok(im):
+  if im.ndim != 3:  # Use only RGB images
+    return False
+  if im.shape[0] < params.patch_size * params.puzzle_n_parts[0] + params.margin_size:
+    return False
+  if im.shape[1] < params.patch_size * params.puzzle_n_parts[1] + params.margin_size:
+    return False
+  return True
+
 
 def get_images_from_folder(folder):
   print ('Getting images from folder: ' + folder)
@@ -200,14 +213,8 @@ def get_images_from_folder(folder):
     if len(images) % 100 == 0:
       print('.', end='', flush=True)
     if fn.endswith('jpeg') or fn.endswith('jpg'):
-      im = imageio.imread(folder + '/' + fn).astype('float32')
-      if im.ndim != 3:  # Use only RGB images
-        continue
-      if im.shape[0] < params.patch_size * params.puzzle_n_parts[0] + params.margin_size:
-        continue
-      if im.shape[1] < params.patch_size * params.puzzle_n_parts[1] + params.margin_size:
-        continue
       if params.load_images_to_memory:
+        im = imageio.imread(folder + '/' + fn).astype('float32')
         im = cv2.resize(im, (params.patch_size * params.puzzle_n_parts[0] + params.margin_size, params.patch_size * params.puzzle_n_parts[1] + params.margin_size))
         if params.preprocess == 'mean-0':
           im = im / im.max()

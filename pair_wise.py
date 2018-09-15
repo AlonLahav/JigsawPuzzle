@@ -10,6 +10,7 @@ import numpy as np
 import tensorflow as tf
 
 from generate_features import GenerateFeatures
+from params import *
 
 layers = tf.keras.layers
 
@@ -82,11 +83,10 @@ class SimpleNet(tf.keras.Model):
 
     x = self.fc_1(x)
     x = tf.nn.leaky_relu(x)
-    if 1:
-      x = self.fc_2(x)
-      x = tf.nn.leaky_relu(x)
-      x = self.fc_3(x)
-      x = tf.nn.leaky_relu(x)
+    x = self.fc_2(x)
+    x = tf.nn.leaky_relu(x)
+    x = self.fc_3(x)
+    x = tf.nn.leaky_relu(x)
 
     x = self.fc_last(x)
 
@@ -130,7 +130,7 @@ class NetOnNet(tf.keras.Model):
     self._first_time = True
 
     MODEL_NAME = 'faster_rcnn_resnet50_coco_2018_01_28_NoResizer'
-    self._generate_features = GenerateFeatures(MODEL_NAME, 'block2/unit_3')
+    self._generate_features = GenerateFeatures(MODEL_NAME, params.net.features_layer)
 
     data_format = 'channels_last'
     bn_axis = 1 if data_format == 'channels_first' else 3
@@ -172,14 +172,16 @@ class NetOnNet(tf.keras.Model):
       input_data = tf.constant(input_data)
       self._first_time = False
 
-    if 0:
+    if params.net.only_fc:
+      x = input_data
+    else:
       x = self.conv1(input_data)
       x = self.bn_conv1(x, training=training)
       x = tf.nn.leaky_relu(x)
-    else:
-      x = input_data
 
-    if 0:
+    if params.net.only_fc:
+      pass
+    else:
       x = self.conv2(x)
       x = self.bn_conv2(x, training=training)
       x = tf.nn.leaky_relu(x)

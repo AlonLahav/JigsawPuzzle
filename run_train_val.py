@@ -4,6 +4,7 @@ import imageio
 import cv2
 import pylab as plt
 import numpy as np
+import shutil
 
 import tensorflow as tf
 import tensorflow.contrib.eager as tfe
@@ -99,12 +100,13 @@ def calc_pred_accurances(labels, sigmoid_res, n_occurances, n_arg_max, sum_predi
     n_arg_max = np.zeros_like(labels[0])
     sum_predictions = np.zeros_like(labels[0])
   for n in range(labels.shape[0]):
-    lbl = np.argmax(labels[n])
-    n_occurances[lbl] += 1
-    prd = np.argmax(sigmoid_res[n])
-    if lbl == prd:
-      n_arg_max [lbl] += 1
-    sum_predictions[lbl] += sigmoid_res[n][lbl]
+    if labels[n].any():
+      lbl = np.argmax(labels[n])
+      n_occurances[lbl] += 1
+      prd = np.argmax(sigmoid_res[n])
+      if lbl == prd:
+        n_arg_max [lbl] += 1
+      sum_predictions[lbl] += sigmoid_res[n][lbl]
 
   return n_occurances, n_arg_max, sum_predictions
 
@@ -119,7 +121,7 @@ def train_val(params):
       n = f.read()
     global_step.assign(int(n))
   except:
-    pass
+    shutil.copyfile(os.path.split(__file__)[0] + '/params.py', params.logdir + '/params.py')
 
   # Init net
   if params.method == 'est_dist_ths':
@@ -128,8 +130,10 @@ def train_val(params):
     classes = (params.pred_radius * 2 + 1) ** 2
   else:
     classes = 4
-  #model = pair_wise.SimpleNet(params, model_fn=params.model_2_load, classes=classes)
-  model = pair_wise.NetOnNet(params, model_fn=params.model_2_load, classes=classes)
+  if params.net.net_type == 'simple':
+    model = pair_wise.SimpleNet(params, model_fn=params.model_2_load, classes=classes)
+  else:
+    model = pair_wise.NetOnNet(params, model_fn=params.model_2_load, classes=classes)
 
   n_labels = (params.pred_radius * 2 + 1) ** 2
   n_occurances_trn = n_arg_max_trn = sum_predictions_trn =  n_occurances_tst = n_arg_max_tst = sum_predictions_tst = None
@@ -183,7 +187,7 @@ def train_val(params):
         true_pred = 100.0 * np.sum(1 - np.any((np.round(sigmoid_res) == 1) - labels, axis=1)) / params.batch_size
         tf.contrib.summary.scalar('accuracy/test', true_pred)
         print('Accuracy On Test: ' + str(true_pred))
-        n_occurances_trn, n_arg_max_trn, sum_predictions_trn = calc_pred_accurances(labels, sigmoid_res, n_occurances_trn, n_arg_max_trn, sum_predictions_trn)
+        n_occurances_tst, n_arg_max_tst, sum_predictions_tst = calc_pred_accurances(labels, sigmoid_res, n_occurances_tst, n_arg_max_tst, sum_predictions_tst)
         #visualize_one_minibatch(images, sigmoid_res>0.5, sigmoid_res, labels)
 
         images, labels, _ = data_input.get_next_batch(train_images, params)
@@ -194,15 +198,17 @@ def train_val(params):
         true_pred = 100.0 * np.sum(1 - np.any((np.round(sigmoid_res) == 1) - labels, axis=1)) / params.batch_size
         tf.contrib.summary.scalar('accuracy/train', true_pred)
         print('Accuracy On Train: ' + str(true_pred))
-        n_occurances_tst, n_arg_max_tst, sum_predictions_tst = calc_pred_accurances(labels, sigmoid_res, n_occurances_tst, n_arg_max_tst, sum_predictions_tst)
+        n_occurances_trn, n_arg_max_trn, sum_predictions_trn = calc_pred_accurances(labels, sigmoid_res, n_occurances_trn, n_arg_max_trn, sum_predictions_trn)
 
         if itr % (100 * 10) == 0:
           print('n_occurances_trn')
           print (n_occurances_trn.reshape((params.pred_radius * 2 + 1,params.pred_radius * 2 + 1)))
-          print('Accuracy arg-max')
-          print ((n_arg_max_trn / n_occurances_trn.astype('float32')).reshape((params.pred_radius * 2 + 1,params.pred_radius * 2 + 1)))
-          print('sum_predictions_trn')
-          print ((sum_predictions_trn / n_occurances_trn.astype('float32')).reshape((params.pred_radius * 2 + 1,params.pred_radius * 2 + 1)))
+          print('n_occurances_tst')
+          print (n_occurances_tst.reshape((params.pred_radius * 2 + 1,params.pred_radius * 2 + 1)))
+          print('Accuracy arg-max tst')
+          print ((n_arg_max_tst / n_occurances_tst.astype('float32')).reshape((params.pred_radius * 2 + 1,params.pred_radius * 2 + 1)))
+          print('sum_predictions_tst')
+          print ((sum_predictions_tst / n_occurances_tst.astype('float32')).reshape((params.pred_radius * 2 + 1,params.pred_radius * 2 + 1)))
 
 if __name__ == '__main__':
   params.action = ['train'] # 'train'  / 'test' # 'train' / 'eval'/ 'eval-visually'
