@@ -33,6 +33,9 @@ def visualize_one_minibatch(images, pred_labels, pred_score, gt_labels=None):
     gt_labels = [None] * len(pred_labels)
   for im_idx in range(8):
     img = images[im_idx]
+    img = img - img.min()
+    img = img / img.max() * 255
+    img = img.astype('uint8')
     score = pred_score[im_idx]
     gt = gt_labels[im_idx]
     f += 1
@@ -121,7 +124,10 @@ def train_val(params):
       n = f.read()
     global_step.assign(int(n))
   except:
-    shutil.copyfile(os.path.split(__file__)[0] + '/params.py', params.logdir + '/params.py')
+    pass
+  if not os.path.isdir(params.logdir):
+    os.makedirs(params.logdir)
+  shutil.copyfile(os.path.split(__file__)[0] + '/params.py', params.logdir + '/params.py')
 
   # Init net
   if params.method == 'est_dist_ths':
@@ -131,8 +137,10 @@ def train_val(params):
   else:
     classes = 4
   if params.net.net_type == 'simple':
+    assert(params.preprocess == 'mean-0')
     model = pair_wise.SimpleNet(params, model_fn=params.model_2_load, classes=classes)
   else:
+    assert(params.preprocess is None)
     model = pair_wise.NetOnNet(params, model_fn=params.model_2_load, classes=classes)
 
   n_labels = (params.pred_radius * 2 + 1) ** 2
