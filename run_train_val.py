@@ -1,3 +1,7 @@
+from __future__ import absolute_import
+from __future__ import division
+from __future__ import print_function
+
 import time
 import os, sys
 import imageio
@@ -154,7 +158,7 @@ def train_val(params):
   with summary_writer.as_default(), tf.contrib.summary.always_record_summaries():
     n_iters_to_train = int(params.num_epocs * len(train_images) / params.batch_size)
     tb = time.time()
-    for itr in range(n_iters_to_train):
+    for itr in xrange(n_iters_to_train):
       # Train model
       if 'train' in params.action:
         if 1:

@@ -1,3 +1,7 @@
+from __future__ import absolute_import
+from __future__ import division
+from __future__ import print_function
+
 import time
 import os, sys
 
@@ -193,8 +197,31 @@ def get_next_batch(images_list, params, est_dist_ths=False):
       images_np, all_labels = crop_and_put_matrix_label(after_aug, prev_image, params)
     im_batch.append(images_np)
     all_labels_batch.append(all_labels)
-    prev_image = after_aug
+
+  if 0:
+    visualize_minibatch(after_aug, prev_image, im_batch, all_labels_batch)
+
+  prev_image = after_aug
+
   return im_batch, all_labels_batch, time_log
+
+def visualize_minibatch(after_aug, prev_image, im_batch, all_labels_batch):
+  if np.all(prev_image == 0):
+    return
+  plt.figure(1)
+  plt.clf()
+  for n in range(len(im_batch)):
+    plt.subplot(2, 2, 1)
+    plt.imshow(after_aug - after_aug.min())
+    plt.subplot(2, 2, 2)
+    plt.imshow(prev_image - prev_image.min())
+    plt.subplot(2, 2, 3)
+    plt.imshow(im_batch[n][:, :, :3] - im_batch[n][:, :, :3].min())
+    plt.subplot(2, 2, 4)
+    plt.imshow(im_batch[n][:, :, 3:] - im_batch[n][:, :, 3:].min())
+
+    print(all_labels_batch[n])
+    plt.show()
 
 def is_image_ok(im):
   if im.ndim != 3:  # Use only RGB images
@@ -210,8 +237,8 @@ def get_images_from_folder(folder):
   print ('Getting images from folder: ' + folder)
   images = []
   for fn in os.listdir(folder):
-    if len(images) % 100 == 0:
-      print('.', end='', flush=True)
+    #if len(images) % 100 == 0:
+    #  print('.', end='', flush=True)
     if fn.endswith('jpeg') or fn.endswith('jpg'):
       if params.load_images_to_memory:
         im = imageio.imread(folder + '/' + fn).astype('float32')

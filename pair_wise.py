@@ -38,6 +38,8 @@ class SimpleNet(tf.keras.Model):
                model_fn=None):
     super(SimpleNet, self).__init__(name='')
 
+    self._first_time = True
+
     data_format = 'channels_last'
     bn_axis = 1 if data_format == 'channels_first' else 3
 
@@ -66,18 +68,21 @@ class SimpleNet(tf.keras.Model):
         print('Keras model was not found: ' + model_fn)
 
   def call(self, input_tensor, training, visualize=False):
-    if len(self.conv1.weights) == 0:
-      x = self.conv1(tf.constant(input_tensor))
+    if self._first_time:
+      input_tensor = tf.constant(input_tensor)
+      self._first_time = False
+
+    if params.net.only_fc:
+      x = input_tensor
     else:
       x = self.conv1(input_tensor)
-    x = self.bn_conv1(x, training=training)
-    x = tf.nn.leaky_relu(x)
-    x = self.max_pool(x)
-
-    x = self.conv2(x)
-    x = self.bn_conv2(x, training=training)
-    x = tf.nn.leaky_relu(x)
-    x = self.max_pool(x)
+      x = self.bn_conv1(x, training=training)
+      x = tf.nn.leaky_relu(x)
+      x = self.max_pool(x)
+      x = self.conv2(x)
+      x = self.bn_conv2(x, training=training)
+      x = tf.nn.leaky_relu(x)
+      x = self.max_pool(x)
 
     x = self.flatten(x)
 
@@ -210,3 +215,34 @@ class NetOnNet(tf.keras.Model):
 
     return x
 
+class Genady():
+  def __init__(self):
+    pass
+
+  def __call__(self, input_image, training):
+    pi = input_image[0][:, :, :3]
+    pj = input_image[0][:, :, 3:]
+
+    # change to LAB colorspace
+
+    # Dissimilarity calculation (Genady's paper (2))
+    assert(pi.shape[0] == pi.shape[1]) # just make sure it is square
+    K = pi.shape[1]
+    Dij_right = np.sum(np.abs(2 * pi[:, K - 1, :] - pi[:, K - 2, :] - pj[:, 0, :]))
+    Dij_left  = np.sum(np.abs(2 * pi[:, 0, :] - pi[:, 1, :] - pj[:, K - 1, :]))
+    Dij_down  = np.sum(np.abs(2 * pi[K - 1, :, :] - pi[K - 2, :, :] - pj[0, :, :]))
+    Dij_up    = np.sum(np.abs(2 * pi[0, :, :] - pi[1, :, :] - pj[K - 1, :, :]))
+
+    maxval = max(Dij_right, Dij_left, Dij_up, Dij_down)
+    #maxval = K * 3 * 4 * (np.max(input_image) - np.min(input_image))# 3 channels, 4 components in sum, K pixels in line
+    #maxval = K * (np.max(input_image) - np.min(input_image))# 3 channels, 4 components in sum, K pixels in line
+
+    d = np.array(((maxval,    Dij_up,   maxval),
+                  (Dij_left,  maxval,   Dij_right),
+                  (maxval,    Dij_down, maxval)))
+
+    # In order to have the similar results to a Deep Network (after sigmoid)
+    dummy_logit = 1 - d / maxval * 2
+    dummy_logit *= 3
+
+    return dummy_logit
