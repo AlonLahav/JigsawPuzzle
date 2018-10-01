@@ -15,7 +15,7 @@ if getpass.getuser() == 'alon':
   params.train_images_path = '/home/alon/datasets/mscoco/val2017'
   params.test_images_path = '/home/alon/datasets/mscoco/val2017'
   params.eval_images_path = '/home/alon/datasets/mscoco/val2017'
-  params.logdir = '/home/alon/git-projects/JigsawPuzzle/models/28-ok'
+  params.logdir = '/home/alon/git-projects/JigsawPuzzle/models/28-ok-'
 else:
   params.train_images_path = '/home/alonlahav/datasets/mscoco/train2017'
   params.test_images_path = '/home/alonlahav/datasets/mscoco/test2017'
