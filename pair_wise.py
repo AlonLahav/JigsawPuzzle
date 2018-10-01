@@ -54,9 +54,17 @@ class SimpleNet(tf.keras.Model):
     self.max_pool2 = layers.MaxPooling2D((3, 3), strides=(2, 2), data_format=data_format)
 
     self.flatten = layers.Flatten()
+
+
     self.fc_1 = layers.Dense(256, name='fc_1')
     self.fc_2 = layers.Dense(256, name='fc_2')
     self.fc_3 = layers.Dense(256, name='fc_3')
+
+    self._fc = []
+    self._fc.append(self.fc_1)
+    self._fc.append(self.fc_2)
+    self._fc.append(self.fc_3)
+
     self.fc_last = layers.Dense(classes, name='fc_last')
 
     if not model_fn is None:
@@ -86,12 +94,9 @@ class SimpleNet(tf.keras.Model):
 
     x = self.flatten(x)
 
-    x = self.fc_1(x)
-    x = tf.nn.leaky_relu(x)
-    x = self.fc_2(x)
-    x = tf.nn.leaky_relu(x)
-    x = self.fc_3(x)
-    x = tf.nn.leaky_relu(x)
+    for n in range(len(self._fc)):
+      x = self._fc[n](x)
+      x = tf.nn.leaky_relu(x)
 
     x = self.fc_last(x)
 
