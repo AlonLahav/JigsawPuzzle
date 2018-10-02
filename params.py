@@ -6,7 +6,7 @@ np.random.seed(2)
 
 params = EasyDict()
 
-params.patch_size = 28
+params.patch_size = 14
 params.puzzle_n_parts = (10, 10) # x - y
 params.margin_size = 15
 params.num_epocs = 10000000
@@ -15,7 +15,7 @@ if getpass.getuser() == 'alon':
   params.train_images_path = '/home/alon/datasets/mscoco/val2017'
   params.test_images_path = '/home/alon/datasets/mscoco/val2017'
   params.eval_images_path = '/home/alon/datasets/mscoco/val2017'
-  params.logdir = '/home/alon/git-projects/JigsawPuzzle/models/28-ok-'
+  params.logdir = '/home/alon/git-projects/JigsawPuzzle/models/31-14x14-2fc-16wide'
 else:
   params.train_images_path = '/home/alonlahav/datasets/mscoco/train2017'
   params.test_images_path = '/home/alonlahav/datasets/mscoco/test2017'
@@ -32,5 +32,6 @@ params.preprocess = 'mean-0' # None , 'mean-0'
 params.net = EasyDict()
 params.net.net_type = 'simple' # simple / net-on-net
 params.net.only_fc = True
-params.net.num_fc_layers = 4
+params.net.num_fc_layers = 2
+params.net.fc_n_neurons = 16
 params.net.features_layer = 'block2/unit_3'

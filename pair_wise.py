@@ -56,9 +56,9 @@ class SimpleNet(tf.keras.Model):
     self.flatten = layers.Flatten()
 
 
-    self.fc_1 = layers.Dense(256, name='fc_1')
-    self.fc_2 = layers.Dense(256, name='fc_2')
-    self.fc_3 = layers.Dense(256, name='fc_3')
+    self.fc_1 = layers.Dense(params.net.fc_n_neurons, name='fc_1')
+    self.fc_2 = layers.Dense(params.net.fc_n_neurons, name='fc_2')
+    self.fc_3 = layers.Dense(params.net.fc_n_neurons, name='fc_3')
 
     self._fc = []
     self._fc.append(self.fc_1)
